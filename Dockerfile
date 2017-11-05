@@ -17,17 +17,21 @@ RUN npm install
 COPY . ./
 
 # Build the Frontend
-WORKDIR /usr/src/app/frontend
-RUN npm run build
-WORKDIR /usr/src/app
+#WORKDIR /usr/src/app/frontend
+#RUN npm run build
+#WORKDIR /usr/src/app
 
 # Default to production mode
 ENV NODE_ENV production
+#ENV SWAGGER_ROOT_PATH
+#ENV REACT_APP_API_PREFIX
+#ENV PUBLIC_URL
 
 VOLUME /data
 VOLUME /images
 
 EXPOSE 3000
 
-CMD [ "npm", "start" ]
+#CMD [ "npm", "start" ]
+CMD cd frontend && npm run build && cd .. && npm start
 
