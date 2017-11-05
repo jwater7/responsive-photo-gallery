@@ -19,9 +19,15 @@ var handler = new imageHandler(image_path);
  *         description: Internal server error
  */
 router.get('/list', function(req, res, next) {
+
+  // TODO if debug
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+
   function cb(args) {
     if (args.error || !args.result) {
-      res.status(500).end();
+      res.json(args);
+      //res.status(500).end();
       return;
     }
     res.json(args);

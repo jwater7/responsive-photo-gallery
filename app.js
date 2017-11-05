@@ -26,7 +26,9 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // routes
-app.use('/', index);
+//TODO remove index
+//app.use('/', index);
+app.use(express.static(path.join(__dirname, 'frontend/build')));
 app.use('/api/v1/', api);
 
 // swagger

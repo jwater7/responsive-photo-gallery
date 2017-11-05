@@ -18,3 +18,10 @@ Or in docker run example:
 ~~~~
 docker run -it --rm -p 3000:3000 jwater7/responsive-photo-gallery
 ~~~~
+
+Create a react app:
+~~~~
+npm install -g create-react-app
+create-react-app frontend
+~~~~
+

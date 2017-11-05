@@ -8,14 +8,20 @@ class imageHandler {
   }
 
   list(_cb) {
-    //_cb({'result': null, 'error': 'NOTIMPLEMENTED'});
     fs.readdir(this.imagePath, (err, files) => {
       if (err) {
+        // TODO debug only errors
         console.log(err);
+        _cb({
+          'result': null,
+          'error': {
+            'code': 500,
+            'message': err.message,
+          }
+        });
+        return;
       }
-      //for (var i = 0, len = files.length; i < len; i++) {
-       _cb({'result': files, 'error': null});
-      //}
+      _cb({'result': files, 'error': null});
     });
   }
 
