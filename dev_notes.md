@@ -5,6 +5,8 @@ npm install -g express-generator
 express --git --view pug --force
 npm init #append more details
 npm install
+npm install swagger-jsdoc --save
+npm install swagger-ui-express --save
 ~~~~
 
 Run with (and add to package.json as debug script)
