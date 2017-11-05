@@ -33,5 +33,6 @@ VOLUME /images
 EXPOSE 3000
 
 #CMD [ "npm", "start" ]
+#TODO create entrypoint.sh
 CMD cd frontend && npm run build && cd .. && npm start
 

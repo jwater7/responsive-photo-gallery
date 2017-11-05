@@ -3,9 +3,14 @@ import React, { Component } from 'react';
 import './App.css';
 
 // TODO pass in
-var root_api_prefix = process.env.REACT_APP_API_PREFIX || '';
-var api_prefix = root_api_prefix + 'api/v1';
-console.log(api_prefix);
+var api_prefix = '';
+if (process.env.REACT_APP_API_PREFIX) {
+  api_prefix = process.env.REACT_APP_API_PREFIX;
+  if (root_api_prefix.substr(-1) != '/') {
+    api_prefix += '/';
+  }
+}
+api_prefix += 'api/v1';
 
 class App extends Component {
   state = {files: []};
