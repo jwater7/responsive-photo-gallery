@@ -1,4 +1,4 @@
-FROM node
+FROM node:alpine
 LABEL maintainer "j"
 
 WORKDIR /usr/src/app
