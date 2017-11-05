@@ -14,6 +14,7 @@ COPY . ./
 ENV NODE_ENV production
 
 VOLUME /data
+VOLUME /images
 
 EXPOSE 3000
 

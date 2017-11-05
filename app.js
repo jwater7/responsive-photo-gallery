@@ -6,6 +6,7 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var swaggerUi = require('swagger-ui-express');
 var swaggerJSDoc = require('swagger-jsdoc');
+var pjson = require('./package.json');
 
 var routing = require('./routes/routing');
 
@@ -26,8 +27,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 var options = {
   swaggerDefinition: {
     info: {
-      title: 'swagger-express-jsdoc', // Title (required)
-      version: '1.0.0', // Version (required)
+      title: pjson.name, // Title (required)
+      version: pjson.version, // Version (required)
     },
   },
   apis: ['./routes/*'], // Path to the API docs
