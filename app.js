@@ -8,7 +8,8 @@ var swaggerUi = require('swagger-ui-express');
 var swaggerJSDoc = require('swagger-jsdoc');
 var pjson = require('./package.json');
 
-var routing = require('./routes/routing');
+var index = require('./routes/index');
+var api = require('./routes/api');
 
 var app = express();
 
@@ -24,24 +25,32 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// routes
+app.use('/', index);
+app.use('/api/v1/', api);
+
+// swagger
+var rootpath = process.env.SWAGGER_ROOT_PATH || '';
+var basepath = rootpath + '/api/v1/';
+
 var options = {
   swaggerDefinition: {
+    swagger: '2.0',
     info: {
       title: pjson.name, // Title (required)
       version: pjson.version, // Version (required)
     },
+    basePath: basepath,
   },
-  apis: ['./routes/*'], // Path to the API docs
+  apis: ['./routes/api*'], // Path to the API docs
 };
 var swaggerSpec = swaggerJSDoc(options);
 
-app.use('/', routing);
-
-app.get('/swagger.json', function(req, res) {
+app.get('/api/v1/swagger.json', function(req, res) {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
