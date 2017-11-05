@@ -6,7 +6,7 @@ import './App.css';
 var api_prefix = '';
 if (process.env.REACT_APP_API_PREFIX) {
   api_prefix = process.env.REACT_APP_API_PREFIX;
-  if (root_api_prefix.substr(-1) != '/') {
+  if (api_prefix.substr(-1) != '/') {
     api_prefix += '/';
   }
 }
