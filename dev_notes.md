@@ -14,3 +14,7 @@ Run with (and add to package.json as debug script)
 DEBUG=responsive-photo-gallery:* npm start
 ~~~~
 
+Or in docker run example:
+~~~~
+docker run -it --rm -p 3000:3000 jwater7/responsive-photo-gallery
+~~~~
