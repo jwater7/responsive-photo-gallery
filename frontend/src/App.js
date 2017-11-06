@@ -3,7 +3,7 @@ import React, { Component } from 'react';
 import './App.css';
 
 // TODO pass in
-var api_prefix = '';
+var api_prefix = '../';
 if (process.env.REACT_APP_API_PREFIX) {
   api_prefix = process.env.REACT_APP_API_PREFIX;
   if (api_prefix.substr(-1) != '/') {
