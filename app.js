@@ -53,11 +53,11 @@ app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 //TODO remove index
 //app.use('/', index);
-app.use(express.static(path.join(__dirname, 'frontend/build')));
-//app.use('/ui/', express.static(path.join(__dirname, 'frontend/build')));
-//app.get('/', function(req, res) {
-//  res.redirect('ui/');
-//});
+//app.use(express.static(path.join(__dirname, 'frontend/build')));
+app.use('/ui/', express.static(path.join(__dirname, 'frontend/build')));
+app.get('/', function(req, res) {
+  res.redirect('ui/');
+});
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
