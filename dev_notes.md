@@ -25,3 +25,6 @@ npm install -g create-react-app
 create-react-app frontend
 ~~~~
 
+This was useful help on express middleware chains
+https://stormpath.com/blog/how-to-write-middleware-for-express-apps
+

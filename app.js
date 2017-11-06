@@ -48,16 +48,14 @@ var swaggerSpec = swaggerJSDoc(options);
 app.get('/api/v1/swagger.json', function(req, res) {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
+  res.end();
 });
-app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec), function(req, res, next) {
+  res.end();
+});
 
-//TODO remove index
-//app.use('/', index);
-//app.use(express.static(path.join(__dirname, 'frontend/build')));
-app.use('/ui/', express.static(path.join(__dirname, 'frontend/build')));
-app.get('/', function(req, res) {
-  res.redirect('ui/');
-});
+// Any other paths, assume they are the frontend
+app.use(express.static(path.join(__dirname, 'frontend/build')));
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
