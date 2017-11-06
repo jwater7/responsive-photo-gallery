@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 //import logo from './logo.svg';
-import './App.css';
+//import './App.css';
+import { Navbar } from 'react-bootstrap';
 
 // TODO pass in
 var api_prefix = '../';
@@ -12,10 +13,15 @@ if (process.env.REACT_APP_API_PREFIX) {
 }
 api_prefix += 'api/v1';
 
+var title = 'Responsive Photo Gallery';
+
 class App extends Component {
   state = {files: []};
 
   componentDidMount() {
+
+    document.title = title;
+
     fetch(api_prefix + '/list')
       .then(res => res.json())
       .then(jsonData => {
@@ -35,10 +41,13 @@ class App extends Component {
   render() {
     return (
       <div className="App">
-        <header className="App-header">
-          {/*<img src={logo} className="App-logo" alt="logo" />*/}
-          <h1 className="App-title">Responsive Photo Gallery</h1>
-        </header>
+        <Navbar>
+          <Navbar.Header>
+            <Navbar.Brand>
+              {title}
+            </Navbar.Brand>
+          </Navbar.Header>
+        </Navbar>
         <ul className="file-list">
           {this.state.files.map(file =>
             <li key={file}>{file}</li>
@@ -50,3 +59,4 @@ class App extends Component {
 }
 
 export default App;
+
