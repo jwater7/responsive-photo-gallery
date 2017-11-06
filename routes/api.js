@@ -5,6 +5,8 @@ var imageHandler = require('../handlers/image-handler');
 var image_path = process.env.IMAGE_PATH || '/images';
 var handler = new imageHandler(image_path);
 
+const debug = require('debug')('responsive-photo-gallery:server');
+
 /**
  * @swagger
  * /list:
@@ -20,9 +22,11 @@ var handler = new imageHandler(image_path);
  */
 router.get('/list', function(req, res, next) {
 
-  // TODO if debug
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  // TODO if debug for all routes
+  if (debug.enabled) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  }
 
   function cb(args) {
     if (args.error || !args.result) {

@@ -25,7 +25,7 @@ COPY . ./
 ENV NODE_ENV production
 #ENV SWAGGER_ROOT_PATH
 #ENV REACT_APP_API_PREFIX
-#ENV PUBLIC_URL
+ENV PUBLIC_URL ./
 
 VOLUME /data
 VOLUME /images
@@ -34,5 +34,5 @@ EXPOSE 3000
 
 #CMD [ "npm", "start" ]
 #TODO create entrypoint.sh
-CMD cd frontend && npm run build && cd .. && npm start
+CMD npm run build-frontend && npm start
 
