@@ -21,7 +21,9 @@ class jwtUserAuth {
 
   login(username, password) {
     if (username == 'username' && password == 'password') {
-      return jwt.sign(username, this.privateKey);
+      return jwt.sign({ user: username }, this.privateKey, {
+        expiresIn: 86400 // expires in 24 hours
+      });
     }
     return false;
   }
