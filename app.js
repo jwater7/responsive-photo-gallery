@@ -39,6 +39,13 @@ var options = {
       version: pjson.version, // Version (required)
     },
     basePath: basepath,
+    securityDefinitions: {
+      ApiKeyAuth: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-API-Key',
+      },
+    },
   },
   apis: ['./routes/api*'], // Path to the API docs
 };

@@ -17,11 +17,48 @@ class jwtUserAuth {
     this.dbPath = dbPath;
     this.privateKey = privateKey;
     this.db = new Datastore({ filename: dbPath + '/db', autoload: true });
+    this.keyBlackList = {};
+
+    // retain "this"
+    this.checkBlackList = this.checkBlackList.bind(this);
+  }
+
+  addToBlackList(token, expiretime) {
+    this.keyBlackList[token] = {
+      'expiretime': expiretime,
+    };
+  }
+
+  checkBlackList(token) {
+    // Auto clean the list
+    for (var key in this.keyBlackList) {
+      if ('expiretime' in this.keyBlackList[key]) {
+        // Delete if its expired anyway
+        if (this.keyBlackList[key].expiretime <= Math.round(Date.now()/1000)) {
+          delete this.keyBlackList[key];
+        }
+      }
+    }
+    // If in the blacklist return bad
+    if (this.keyBlackList[token]) {
+      return false;
+    }
+    return true;
+  }
+
+  logout(token) {
+    if (token) {
+      jwt.verify(token, this.privateKey, function(err, decoded) {
+        if (!err) {
+          this.addToBlackList(token, decoded.exp);
+        }
+      }.bind(this));
+    }
   }
 
   login(username, password) {
-    if (username == 'username' && password == 'password') {
-      return jwt.sign({ user: username }, this.privateKey, {
+    if (username == 'TODOadmin' && password == 'TODOpassword') {
+      return jwt.sign({ 'user': username, 'admin': true }, this.privateKey, {
         expiresIn: 86400 // expires in 24 hours
       });
     }
@@ -29,13 +66,15 @@ class jwtUserAuth {
   }
 
   authenticate(req, res, next) {
-    var token = req.body.token || req.query.token || req.headers['x-access-token'];
+    var token = req.body.token || req.query.token || req.headers['x-api-key'];
     if (token) {
       jwt.verify(token, this.privateKey, function(err, decoded) {
         if (!err) {
-          req.decoded = decoded;
+          if (this.checkBlackList(token)) {
+            req.decoded = decoded;
+          }
         }
-      });
+      }.bind(this));
     }
     next();
   }

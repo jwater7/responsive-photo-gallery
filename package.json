@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
-    "debug": "IMAGE_PATH=./pics DATA_PATH=./data PRIVATE_KEY='secretsauce' PORT=8000 DEBUG=express,responsive-photo-gallery:* npm start",
+    "debug": "IMAGE_PATH=./pics DATA_PATH=./data PORT=8000 DEBUG=express,responsive-photo-gallery:* npm start",
     "build-debug-frontend": "PUBLIC_URL=./ npm run build-frontend",
     "build-frontend": "cd frontend; npm run build; cd .."
   },
