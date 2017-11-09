@@ -3,23 +3,26 @@ import { Redirect } from 'react-router-dom';
 import API from '../api';
 
 class Login extends React.Component {
-  state = {
-    redirectToReferrer: false,
+
+  constructor(props) {
+    super(props);
+    this.state = {
+      redirectToReferrer: false,
+    };
   }
 
-  login = () => {
-    const self = this;
+  login = (loginCallback) => {
     API.login((token) => {
       if(token) {
-        console.log(self.props);
-        self.props.loginCallback(token);
-        self.setState({ redirectToReferrer: true })
+        loginCallback(token);
+        this.setState({ redirectToReferrer: true })
       }
     });
   }
 
   render() {
-    const { from } = this.props.location.state || { from: { pathname: '/' } };
+    //const { from } = this.props.location.state || { from: { pathname: '/' } };
+    const { from } = { from: { pathname: '/' } };
     const { redirectToReferrer } = this.state;
 
     if (redirectToReferrer) {
@@ -31,7 +34,7 @@ class Login extends React.Component {
     return (
       <div>
         <p>You must log in to view {from.pathname}</p>
-        <button onClick={this.login}>Login</button>
+        <button onClick={this.login(this.props.onSignIn)}>Login</button>
       </div>
     );
   }
