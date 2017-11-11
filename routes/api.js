@@ -13,6 +13,19 @@ var handler = new imageHandler(image_path);
 
 const debug = require('debug')('responsive-photo-gallery:server');
 
+// Enable CORS routes for debug only
+if (debug.enabled) {
+  router.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+  });
+  router.options(function(req, res, next) {
+    res.status(200).end();
+  });
+}
+
+// Authenticate if data is available
 router.use(auth.authenticate.bind(auth));
 
 /**
@@ -45,12 +58,6 @@ router.use(auth.authenticate.bind(auth));
  *       - ApiKeyAuth: []
  */
 router.post('/logout', auth.required, function(req, res, next) {
-
-  // TODO if debug for all routes
-  if (debug.enabled) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  }
 
   var token = req.body.token || req.query.token || req.headers['x-api-key'];
   auth.logout(token);
@@ -91,12 +98,6 @@ router.post('/logout', auth.required, function(req, res, next) {
  */
 router.post('/login', function(req, res, next) {
 
-  // TODO if debug for all routes
-  if (debug.enabled) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  }
-
   var token = auth.login(req.body.username, req.body.password);
   if (token) {
     res.status(200).json({
@@ -134,12 +135,6 @@ router.post('/login', function(req, res, next) {
  *       - ApiKeyAuth: []
  */
 router.get('/list', auth.required, function(req, res, next) {
-
-  // TODO if debug for all routes
-  if (debug.enabled) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  }
 
   function cb(args) {
     res.json(args);
