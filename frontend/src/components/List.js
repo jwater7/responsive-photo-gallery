@@ -35,11 +35,14 @@ class List extends Component {
 
   render() {
     return (
-      <ul className="file-list">
-        {this.state.files.map(file =>
-          <li key={file}>{file}</li>
-        )}
-      </ul>
+      <div>
+        <h1>List:</h1>
+        <ul className="file-list">
+          {this.state.files.map(file =>
+            <li key={file}>{file}</li>
+          )}
+        </ul>
+      </div>
     );
   }
 }

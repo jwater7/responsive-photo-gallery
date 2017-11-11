@@ -11,13 +11,16 @@ class Login extends React.Component {
     };
   }
 
-  login = (loginCallback) => {
+  login() {
+    this.props.updateAuthCB('testit');
+    /*
     API.login((token) => {
       if(token) {
-        loginCallback(token);
+        this.props.updateAuthCB(token);
         this.setState({ redirectToReferrer: true })
       }
-    });
+    }
+    */
   }
 
   render() {
@@ -34,7 +37,7 @@ class Login extends React.Component {
     return (
       <div>
         <p>You must log in to view {from.pathname}</p>
-        <button onClick={this.login(this.props.onSignIn)}>Login</button>
+        <button onClick={this.login.bind(this)}>Login</button>
       </div>
     );
   }
