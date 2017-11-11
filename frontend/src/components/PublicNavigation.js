@@ -1,12 +1,12 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Nav } from 'react-bootstrap';
+import { Nav, NavItem } from 'react-bootstrap';
+import { LinkContainer } from 'react-router-bootstrap';
 
 const PublicNavigation = () => (
   <Nav pullRight>
-    <li>
-      <NavLink to="/login" activeClassName="active">Login</NavLink>
-    </li>
+    <LinkContainer to="/login">
+      <NavItem>Login</NavItem>
+    </LinkContainer>
   </Nav>
 );
 

@@ -1,12 +1,12 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Nav } from 'react-bootstrap';
+import { Nav, NavItem } from 'react-bootstrap';
+import { LinkContainer } from 'react-router-bootstrap';
 
 const AuthenticatedNavigation = () => (
   <Nav pullRight>
-    <li>
-      <NavLink to="/logout" activeClassName="active">Logout</NavLink>
-    </li>
+    <LinkContainer to="/logout">
+      <NavItem>Logout</NavItem>
+    </LinkContainer>
   </Nav>
 );
 
