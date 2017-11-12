@@ -88,6 +88,9 @@ const API = {
   },
 
   imageurl: (opts) => {
+    if (!opts.album || !opts.image || !opts.token) {
+      return false;
+    }
     return(api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image);
   },
 

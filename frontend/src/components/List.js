@@ -15,25 +15,50 @@ class List extends Component {
       this.setState({
         albums: albums,
       })
-    }, {
-      token: this.props.authtoken,
-    });
 
-    API.list((files) => {
-      this.setState({
-        files: files,
-      })
+      let first = Object.keys(albums)[0];
+      if (!first) {
+        return;
+      }
+
+      API.list((files) => {
+        this.setState({
+          files: files,
+        })
+      }, {
+        token: this.props.authtoken,
+        album: first,
+      });
+
     }, {
       token: this.props.authtoken,
-      album: 'dir',
     });
 
   }
 
   photos = () => {
-    return([
-      {src: 'https://source.unsplash.com/2ShvY8Lf6l0/800x599', width: 4, height: 1},
-    ]);
+    let first = Object.keys(this.state.albums)[0];
+    if (!first) {
+      return [];
+    }
+    let imagelist = [];
+    let filelist = Object.keys(this.state.files);
+    for (let i = 0; i < filelist.length; i++) {
+      let imageurl = API.imageurl({
+        token: this.props.authtoken,
+        album: first,
+        image: filelist[i],
+      })
+      if(!imageurl) {
+        continue;
+      }
+      let imageobj = {src: imageurl, width: 1, height: 1};
+      imagelist.push(imageobj);
+    }
+    if (!imagelist) {
+      return [];
+    }
+    return(imagelist);
   }
 
   render() {
