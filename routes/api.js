@@ -144,12 +144,12 @@ router.post('/login', function(req, res, next) {
 router.get('/albums', auth.required, function(req, res, next) {
 
   function cb(args) {
-    res.json(args);
     if (args.error || !args.result) {
-      //res.status(500);
+      res.status(500);
     } else {
       res.status(200);
     }
+    res.json(args);
     res.end();
   }
   handler.albums(cb);
@@ -187,15 +187,50 @@ router.get('/list', auth.required, function(req, res, next) {
   var album = req.query.album;
 
   function cb(args) {
-    res.json(args);
     if (args.error || !args.result) {
-      //res.status(500);
+      res.status(500);
     } else {
       res.status(200);
     }
+    res.json(args);
     res.end();
   }
   handler.list(album, cb);
+});
+
+/**
+ * @swagger
+ * /image:
+ *   get:
+ *     description: Download the image
+ *       Authentication token for requested info is required
+ *     parameters:
+ *       - name: album
+ *         in: query
+ *         description: Album name
+ *         schema:
+ *           type: string
+ *           required: true
+ *       - name: image
+ *         in: query
+ *         description: image name
+ *         schema:
+ *           type: string
+ *           required: true
+ *     responses:
+ *       200:
+ *         description: Returns the download
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.get('/image', auth.required, function(req, res, next) {
+
+  let album = req.query.album;
+  let image = req.query.image;
+
+  let image_full_path = handler.image(album, image);
+  res.download(image_full_path);
+
 });
 
 module.exports = router;

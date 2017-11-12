@@ -13,6 +13,13 @@ class imageHandler {
     this.imagePath = imagePath;
   }
 
+  image(album, image) {
+    let san_album = sanitize(album);
+    let san_image = sanitize(image);
+    let ip = this.imagePath;
+    return path.join(ip, san_album, san_image);
+  }
+
   list(album, _cb) {
  
     let images = {};
