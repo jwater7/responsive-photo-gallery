@@ -123,9 +123,9 @@ router.post('/login', function(req, res, next) {
 
 /**
  * @swagger
- * /list:
+ * /albums:
  *   get:
- *     description: Returns list of files
+ *     description: Returns the list of albums
  *       Authentication token for requested info is required
  *     consumes:
  *       - application/json
@@ -141,7 +141,7 @@ router.post('/login', function(req, res, next) {
  *     security:
  *       - ApiKeyAuth: []
  */
-router.get('/list', auth.required, function(req, res, next) {
+router.get('/albums', auth.required, function(req, res, next) {
 
   function cb(args) {
     res.json(args);
@@ -152,7 +152,50 @@ router.get('/list', auth.required, function(req, res, next) {
     }
     res.end();
   }
-  handler.list(cb);
+  handler.albums(cb);
+});
+
+/**
+ * @swagger
+ * /list:
+ *   get:
+ *     description: Returns list of files
+ *       Authentication token for requested info is required
+ *     consumes:
+ *       - application/json
+ *     produces:
+ *       - application/json
+ *     parameters:
+ *       - name: album
+ *         in: query
+ *         description: Album name to list
+ *         schema:
+ *           type: string
+ *           required: true
+ *     responses:
+ *       200:
+ *         description: Returns JSON list
+ *       401:
+ *         description: Authentication Required
+ *       500:
+ *         description: Internal server error
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.get('/list', auth.required, function(req, res, next) {
+
+  var album = req.query.album;
+
+  function cb(args) {
+    res.json(args);
+    if (args.error || !args.result) {
+      //res.status(500);
+    } else {
+      res.status(200);
+    }
+    res.end();
+  }
+  handler.list(album, cb);
 });
 
 module.exports = router;
