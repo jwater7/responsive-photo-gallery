@@ -11,13 +11,23 @@ const title = 'Responsive Photo Gallery';
 
 const cookies = new Cookies();
 
+// TODO pass in
+var basename = '/';
+if (process.env.REACT_APP_BASENAME) {
+  basename = process.env.REACT_APP_BASENAME;
+  if (basename.substr(-1) !== '/') {
+    basename += '/';
+  }
+}
+
 class App extends React.Component {
 
   constructor(props) {
     super(props);
 
     let authtoken = cookies.get('authtoken');
-    if (authtoken) {
+    // ugh, cookies are strings, catch the bool
+    if (authtoken === "false") {
       authtoken = JSON.parse(authtoken);
     }
 
@@ -36,7 +46,7 @@ class App extends React.Component {
 
   render() {
     return (
-      <Router>
+      <Router basename={basename}>
         <div className="App">
           <AppNavigation pagetitle={title} authtoken={this.state.authtoken} {...this.props} />
           <AppMain authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} {...this.props} />
