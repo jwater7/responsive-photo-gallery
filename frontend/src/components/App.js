@@ -9,25 +9,20 @@ const title = 'Responsive Photo Gallery';
 
 class App extends React.Component {
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      auth: {
-        token: false,
-      },
-    };
-  }
+  state = {
+    authtoken: false,
+  };
 
   updateAuth = (token) => {
-    this.setState({auth: {token: token}});
+    this.setState({authtoken: token});
   }
 
   render() {
     return (
       <Router>
         <div className="App">
-          <AppNavigation pagetitle={title} authenticated={this.state.auth.token} {...this.props} />
-          <AppMain authenticated={this.state.auth.token} updateAuthCB={this.updateAuth} {...this.props} />
+          <AppNavigation pagetitle={title} authtoken={this.state.authtoken} {...this.props} />
+          <AppMain authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} {...this.props} />
         </div>
       </Router>
     );

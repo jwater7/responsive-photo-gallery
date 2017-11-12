@@ -1,15 +1,5 @@
 import React, { Component } from 'react';
-//import API from '../api';
-
-// TODO pass in
-var api_prefix = '';
-if (process.env.REACT_APP_API_PREFIX) {
-  api_prefix = process.env.REACT_APP_API_PREFIX;
-  if (api_prefix.substr(-1) !== '/') {
-    api_prefix += '/';
-  }
-}
-api_prefix += 'api/v1';
+import API from '../api';
 
 class List extends Component {
 
@@ -17,20 +7,13 @@ class List extends Component {
 
   componentDidMount() {
 
-    fetch(api_prefix + '/list')
-      .then(res => res.json())
-      .then(jsonData => {
-        if (jsonData.error) {
-          console.log('LIST ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
-          return;
-        }
-        this.setState({
-          files: jsonData.result,
-        })
+    API.list((files) => {
+      this.setState({
+        files: files,
       })
-      // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
-
+    }, {
+      token: this.props.authtoken,
+    });
   }
 
   render() {

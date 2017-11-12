@@ -4,15 +4,15 @@ import { Route, Redirect } from 'react-router-dom';
 /* TODO why not work
 const Authenticated = (props) => (
   <div>
-    {props.authenticated ? <Route {...props} /> : <Redirect to="/login" />}
+    {props.authtoken ? <Route {...props} /> : <Redirect to="/login" />}
   </div>
 );
 */
-const AuthenticatedRoute = ({ authenticated, component, updateAuthCB, ...rest }) => (
+const AuthenticatedRoute = ({ authtoken, component, updateAuthCB, ...rest }) => (
   <Route {...rest} render={(props) => {
-    //if (!authenticated) return <div></div>;
-    return authenticated ?
-    (React.createElement(component, { ...props, authenticated, updateAuthCB })) :
+    //if (!authtoken) return <div></div>;
+    return authtoken ?
+    (React.createElement(component, { ...props, authtoken, updateAuthCB })) :
     (<Redirect to="/login" />);
   }} />
 );
@@ -20,7 +20,7 @@ const AuthenticatedRoute = ({ authenticated, component, updateAuthCB, ...rest })
 /*
 const AuthenticatedRoute = ({ component: Component, ...rest}) => (
   <Route {...rest} render={(props) => (
-    rest.authenticated ?
+    rest.authtoken ?
     (<Component {...rest} />) :
     (<Redirect to="/login" />)
   )} />

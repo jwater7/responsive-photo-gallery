@@ -4,8 +4,8 @@ import { Navbar } from 'react-bootstrap';
 import PublicNavigation from './PublicNavigation';
 import AuthenticatedNavigation from './AuthenticatedNavigation';
 
-const renderNavigation = authenticated => (
-  authenticated ? <AuthenticatedNavigation /> : <PublicNavigation />
+const renderNavigation = authtoken => (
+  authtoken ? <AuthenticatedNavigation /> : <PublicNavigation />
 );
 
 class AppNavigation extends React.Component {
@@ -29,7 +29,7 @@ class AppNavigation extends React.Component {
           <Navbar.Toggle />
         </Navbar.Header>
         <Navbar.Collapse>
-          { renderNavigation(this.props.authenticated) }
+          { renderNavigation(this.props.authtoken) }
         </Navbar.Collapse>
       </Navbar>
     );

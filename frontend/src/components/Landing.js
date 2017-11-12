@@ -2,7 +2,7 @@ import React from 'react';
 
 const Start = () => (
   <div>
-    Welcome
+    Welcome, please login to view the gallery
   </div>
 );
 

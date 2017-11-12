@@ -16,8 +16,10 @@ const debug = require('debug')('responsive-photo-gallery:server');
 // Enable CORS routes for debug only
 if (debug.enabled) {
   router.use(function(req, res, next) {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    //res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Origin", "http://localhost:3000");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-API-Key");
+    res.header("Access-Control-Allow-Credentials", "true");
     next();
   });
   router.options(function(req, res, next) {
@@ -100,6 +102,11 @@ router.post('/login', function(req, res, next) {
 
   var token = auth.login(req.body.username, req.body.password);
   if (token) {
+
+    // Set up a cookie so client can easily send it with the header
+    //res.cookie('authtoken', token, { secure: true });
+    //res.cookie('authtoken', token);
+
     res.status(200).json({
       result: token,
     });

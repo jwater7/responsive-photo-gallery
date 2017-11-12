@@ -3,20 +3,18 @@ import API from '../api';
 
 class Logout extends React.Component {
 
-  logout() {
-    this.props.updateAuthCB(false);
-    /*
-    API.login((token) => {
-      if(token) {
-        this.props.updateAuthCB(token);
-        this.setState({ redirectToReferrer: true })
-      }
-    }
-    */
+  logout = () => {
+    //this.props.updateAuthCB(false);
+    API.logout((token) => {
+      this.props.updateAuthCB(token);
+    });
+  }
+
+  componentDidMount() {
+    this.logout();
   }
 
   render() {
-    this.logout();
     return (
       <div>
         <p>You are now logged out</p>

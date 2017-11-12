@@ -4,23 +4,32 @@ import API from '../api';
 
 class Login extends React.Component {
 
-  constructor(props) {
-    super(props);
-    this.state = {
-      redirectToReferrer: false,
-    };
+  state = {
+    redirectToReferrer: false,
+    username: 'TODOadmin',
+    password: 'TODOpassword',
+  };
+
+  handleUsernameChange = (e) => {
+    this.setState({username: e.target.value});
   }
 
-  login() {
-    this.props.updateAuthCB('testit');
-    /*
+  handlePasswordChange = (e) => {
+    this.setState({password: e.target.value});
+  }
+
+  login = (e) => {
+    e.preventDefault();
     API.login((token) => {
       if(token) {
         this.props.updateAuthCB(token);
-        this.setState({ redirectToReferrer: true })
+        // TODO referrer redirect? (cant do here)
+        //this.setState({ redirectToReferrer: true });
       }
-    }
-    */
+    }, {
+      username: this.state.username,
+      password: this.state.password,
+    });
   }
 
   render() {
@@ -37,7 +46,13 @@ class Login extends React.Component {
     return (
       <div>
         <p>You must log in to view {from.pathname}</p>
-        <button onClick={this.login.bind(this)}>Login</button>
+        <form onSubmit={this.login}>
+          <label>Name:
+            <input type="text" value={this.state.username} onChange={this.handleUsernameChange} />
+            <input type="password" value={this.state.password} onChange={this.handlePasswordChange} />
+          </label>
+          <input type="submit" value="Login" />
+        </form>
       </div>
     );
   }

@@ -2,11 +2,11 @@ import React from 'react';
 import { Route, Redirect } from 'react-router-dom';
 
 // TODO /list?
-const PublicRoute = ({ authenticated, component, updateAuthCB, ...rest }) => (
+const PublicRoute = ({ authtoken, component, updateAuthCB, ...rest }) => (
   <Route {...rest} render={(props) => {
-    //if (authenticated) return <div></div>;
-    return !authenticated ?
-    (React.createElement(component, { ...props, authenticated, updateAuthCB })) :
+    //if (authtoken) return <div></div>;
+    return !authtoken ?
+    (React.createElement(component, { ...props, authtoken, updateAuthCB })) :
     (<Redirect to="/list" />);
   }} />
 );
