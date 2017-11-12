@@ -54,13 +54,8 @@ const API = {
       .catch(error => console.log('FETCH ERROR: ' + error.message));
   },
 
-  list: (_cb, opts) => {
-    //fetch(api_prefix + '/list', {
-    //  headers: {
-    //    'X-API-Key': opts.token,
-    //  },
-    //})
-    fetch(api_prefix + '/list?token=' + opts.token)
+  albums: (_cb, opts) => {
+    fetch(api_prefix + '/albums?token=' + opts.token)
       .then(res => res.json())
       .then(jsonData => {
         if (jsonData.error) {
@@ -71,6 +66,29 @@ const API = {
       })
       // TODO debug log
       .catch(error => console.log('FETCH ERROR: ' + error.message));
+  },
+
+  list: (_cb, opts) => {
+    //fetch(api_prefix + '/list', {
+    //  headers: {
+    //    'X-API-Key': opts.token,
+    //  },
+    //})
+    fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album)
+      .then(res => res.json())
+      .then(jsonData => {
+        if (jsonData.error) {
+          console.log('LIST ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          return;
+        }
+        _cb(jsonData.result);
+      })
+      // TODO debug log
+      .catch(error => console.log('FETCH ERROR: ' + error.message));
+  },
+
+  imageurl: (opts) => {
+    return(api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image);
   },
 
 }
