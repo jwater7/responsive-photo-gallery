@@ -33,8 +33,25 @@ const API = {
       .catch(error => console.log('FETCH ERROR: ' + error.message));
   },
 
-  logout: (_cb) => {
-    _cb(false);
+  logout: (_cb, opts) => {
+    fetch(api_prefix + '/logout', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(opts),
+    })
+      .then(res => res.json())
+      .then(jsonData => {
+        if (jsonData.error) {
+          console.log('LIST ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          return;
+        }
+        _cb(jsonData.result === opts.token);
+      })
+      // TODO debug log
+      .catch(error => console.log('FETCH ERROR: ' + error.message));
   },
 
   list: (_cb, opts) => {

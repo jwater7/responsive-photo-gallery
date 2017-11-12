@@ -4,9 +4,15 @@ import API from '../api';
 class Logout extends React.Component {
 
   logout = () => {
-    //this.props.updateAuthCB(false);
-    API.logout((token) => {
-      this.props.updateAuthCB(token);
+    API.logout((good) => {
+      if (!good) {
+        //TODO
+        console.log('Failed to logout');
+        return;
+      }
+      this.props.updateAuthCB(false);
+    }, {
+      token: this.props.authtoken,
     });
   }
 
