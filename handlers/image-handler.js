@@ -5,6 +5,7 @@ const path = require('path');
 const sanitize = require('sanitize-filename');
 
 const sharp = require('sharp');
+const exifReader = require('exif-reader');
 const thumbnailSharp = require('../thumbnail-sharp/index');
 
 const isDirectory = source => fs.lstatSync(source).isDirectory()
@@ -74,29 +75,57 @@ class imageHandler {
     
     var itemsProcessed = 0;
     files.forEach((file) => {
-      // get file size
-      sharp(path.join(album_path, file))
-        .metadata((err, metadata) => {
-          itemsProcessed++;
-          if(!err) {
-            images[file] = {description: file, width: metadata.width, height: metadata.height};
-          }
-          // Done - return the info
-          if (itemsProcessed >= files.length) {
-            if (!images) {
-              _cb({
-                'error': {
-                  'code': 500,
-                  'message': err.message,
+      let file_path = path.join(album_path, file);
+      // get file ctime
+      fs.stat(file_path, (err, stats) => {
+        if (err) {
+            itemsProcessed++;
+            return;
+        }
+        // get file size
+        sharp(file_path)
+          .metadata((err, metadata) => {
+            itemsProcessed++;
+            if(!err) {
+              let modifyDate = stats.mtime;
+              let gps = false;
+              if (metadata.exif) {
+                const exifData = exifReader(metadata.exif);
+                if (exifData) {
+                  if(exifData.image.ModifyDate) {
+                    modifyDate = exifData.image.ModifyDate;
+                  }
+                  if(exifData.gps) {
+                    gps = exifData.gps;
+                  }
                 }
-              });
-              return;
+              }
+              images[file] = {
+                description: file,
+                width: metadata.width,
+                height: metadata.height,
+                orientation: metadata.orientation,
+                modifyDate: modifyDate,
+                gps: gps,
+              };
             }
-            _cb({
-              'result': images,
-            });
-          }
-        });
+            // Done - return the info
+            if (itemsProcessed >= files.length) {
+              if (!images) {
+                _cb({
+                  'error': {
+                    'code': 500,
+                    'message': err.message,
+                  }
+                });
+                return;
+              }
+              _cb({
+                'result': images,
+              });
+            }
+          });
+      });
     });
 
   }
