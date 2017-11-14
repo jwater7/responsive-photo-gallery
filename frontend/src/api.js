@@ -94,6 +94,13 @@ const API = {
     return(api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image);
   },
 
+  appendThumbnail: (url, opts) => {
+    if (!opts.size) {
+      return false;
+    }
+    return(url + '&thumb=' + opts.size);
+  },
+
 }
 
 export default API;
