@@ -2,7 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 const mkdirp = require('mkdirp');
-const sharp = require('sharp');
+var sharp = require('sharp');
+sharp.cache(false);
 
 function convert(src, dest, width, height, cb) {
 
@@ -27,7 +28,6 @@ function convert(src, dest, width, height, cb) {
       }
 
       sharp(src)
-        .cache(0)
         .resize(width, height)
         .crop(sharp.strategy.attention)
         .toFile(dest, (err, info) => {

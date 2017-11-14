@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
-const sharp = require('sharp');
+var sharp = require('sharp');
+sharp.cache(false);
 const exifReader = require('exif-reader');
 const thumbnailSharp = require('../thumbnail-sharp/index');
 
@@ -84,7 +85,6 @@ class imageHandler {
         }
         // get file size
         sharp(file_path)
-          .cache(0)
           .metadata((err, metadata) => {
             itemsProcessed++;
             if(!err) {
