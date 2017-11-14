@@ -84,6 +84,7 @@ class imageHandler {
         }
         // get file size
         sharp(file_path)
+          .cache(0)
           .metadata((err, metadata) => {
             itemsProcessed++;
             if(!err) {

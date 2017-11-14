@@ -27,6 +27,7 @@ function convert(src, dest, width, height, cb) {
       }
 
       sharp(src)
+        .cache(0)
         .resize(width, height)
         .crop(sharp.strategy.attention)
         .toFile(dest, (err, info) => {
