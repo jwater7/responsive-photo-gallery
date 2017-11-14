@@ -4,27 +4,51 @@ const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
+const sharp = require('sharp');
+const thumbnailSharp = require('../thumbnail-sharp/index');
+
 const isDirectory = source => fs.lstatSync(source).isDirectory()
 
 //const getDirectories = source => fs.readdirSync(source).map(name => path.join(source, name)).filter(isDirectory)
 
 class imageHandler {
-  constructor(imagePath) {
+  constructor(imagePath, thumbPath=false) {
     this.imagePath = imagePath;
+    this.thumbPath = thumbPath;
   }
 
-  image(album, image) {
-    let san_album = sanitize(album);
-    let san_image = sanitize(image);
-    let ip = this.imagePath;
-    return path.join(ip, san_album, san_image);
+  image(album, image, thumb, cb) {
+
+    const san_album = sanitize(album);
+    const san_image = sanitize(image);
+    const image_path = path.join(this.imagePath, san_album, san_image);
+
+    // If they want a thumbnail, generate, cache, and return it instead
+    if (thumb) {
+      const san_thumb = sanitize(thumb);
+      const thumb_path = path.join(this.thumbPath, san_album, san_thumb, san_image);
+      const [ width, height ] = san_thumb.split('x');
+
+      // make sure we have valid input
+      const san_width = parseInt(width);
+      const san_height = parseInt(height);
+      if (+width === san_width && +height === san_height) {
+        return thumbnailSharp.convert(image_path, thumb_path, san_width, san_height, (err) => {
+          if (err) {
+            return cb(image_path);
+          }
+          return cb(thumb_path);
+        });
+      }
+    }
+
+    return cb(image_path);
   }
 
   list(album, _cb) {
- 
+
     let images = {};
-    let ip = this.imagePath;
-    let san_album = sanitize(album);
+    const san_album = sanitize(album);
     if (!san_album) {
       _cb({
         'error': {
@@ -35,8 +59,9 @@ class imageHandler {
       return;
     }
     let files = [];
+    let album_path = path.join(this.imagePath, san_album);
     try {
-      files = fs.readdirSync(path.join(ip, san_album));
+      files = fs.readdirSync(album_path);
     } catch(err) {
       _cb({
         'error': {
@@ -47,20 +72,31 @@ class imageHandler {
       return;
     }
     
-    files.forEach(function(file) {
-      images[file] = {description: file};
-    });
-    if (!images) {
-      _cb({
-        'error': {
-          'code': 500,
-          'message': err.message,
-        }
-      });
-      return;
-    }
-    _cb({
-      'result': images,
+    var itemsProcessed = 0;
+    files.forEach((file) => {
+      // get file size
+      sharp(path.join(album_path, file))
+        .metadata((err, metadata) => {
+          itemsProcessed++;
+          if(!err) {
+            images[file] = {description: file, width: metadata.width, height: metadata.height};
+          }
+          // Done - return the info
+          if (itemsProcessed >= files.length) {
+            if (!images) {
+              _cb({
+                'error': {
+                  'code': 500,
+                  'message': err.message,
+                }
+              });
+              return;
+            }
+            _cb({
+              'result': images,
+            });
+          }
+        });
     });
 
   }
@@ -68,10 +104,9 @@ class imageHandler {
   albums(_cb) {
  
     let dirs = {};
-    let ip = this.imagePath;
-    let files = fs.readdirSync(ip);
-    files.forEach(function(file) {
-      if (isDirectory(path.join(ip, file))) {
+    let files = fs.readdirSync(this.imagePath);
+    files.forEach((file) => {
+      if (isDirectory(path.join(this.imagePath, file))) {
         dirs[file] = {description: file};
       }
     });

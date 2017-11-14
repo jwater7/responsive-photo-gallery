@@ -1,15 +1,16 @@
 var express = require('express');
 var router = express.Router();
 
-var jwtAuth = require('../jwt-user-auth/index');
-var data_path = process.env.DATA_PATH || '/data/auth';
+const jwtAuth = require('../jwt-user-auth/index');
+const auth_path = process.env.AUTH_PATH || '/data/auth';
 const crypto = require("crypto");
 var private_key = process.env.PRIVATE_KEY || crypto.randomBytes(3*4).toString('base64')
-var auth = new jwtAuth(data_path, private_key);
+var auth = new jwtAuth(auth_path, private_key);
 
-var imageHandler = require('../handlers/image-handler');
-var image_path = process.env.IMAGE_PATH || '/images';
-var handler = new imageHandler(image_path);
+const imageHandler = require('../handlers/image-handler');
+const image_path = process.env.IMAGE_PATH || '/images';
+const thumb_path = process.env.THUMB_PATH || '/data/thumbs';
+var handler = new imageHandler(image_path, thumb_path);
 
 const debug = require('debug')('responsive-photo-gallery:server');
 
@@ -217,6 +218,12 @@ router.get('/list', auth.required, function(req, res, next) {
  *         schema:
  *           type: string
  *           required: true
+ *       - name: thumb
+ *         in: query
+ *         description: an optional thumb dimension (e.g. "50x50")
+ *         schema:
+ *           type: string
+ *           required: false
  *     responses:
  *       200:
  *         description: Returns the download
@@ -227,9 +234,11 @@ router.get('/image', auth.required, function(req, res, next) {
 
   let album = req.query.album;
   let image = req.query.image;
+  let thumb = req.query.thumb;
 
-  let image_full_path = handler.image(album, image);
-  res.download(image_full_path);
+  handler.image(album, image, thumb, (image_full_path) => {
+    res.download(image_full_path);
+  });
 
 });
 
