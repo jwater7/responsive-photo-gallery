@@ -6,7 +6,7 @@ WORKDIR /usr/src/app
 # Install dependencies
 COPY package.json package-lock.json ./
 #RUN npm install
-# BUild with gyp dependencies for sharp, see: http://sharp.dimens.io/en/stable/install/
+# Build with gyp dependencies for sharp, see: http://sharp.dimens.io/en/stable/install/
 RUN apk add --no-cache --virtual .gyp \
         python \
         make \
