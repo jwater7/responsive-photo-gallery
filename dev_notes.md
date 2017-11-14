@@ -28,3 +28,20 @@ create-react-app frontend
 This was useful help on express middleware chains
 https://stormpath.com/blog/how-to-write-middleware-for-express-apps
 
+Useful links:
+* http://sharp.dimens.io/en/stable/api-input/#metadata
+* https://themeteorchef.com/tutorials/getting-started-with-react-router-v4
+* https://github.com/ReactTraining/react-router/blob/master/website/modules/examples/Auth.js
+* https://medium.com/@ruthmpardee/passing-data-between-react-components-103ad82ebd17
+* https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
+* https://reacttraining.com/react-router/web/example/auth-workflow
+* https://stackoverflow.com/questions/43520498/react-router-private-routes-redirect-not-working
+* https://medium.freecodecamp.org/react-binding-patterns-5-approaches-for-handling-this-92c651b5af56
+* https://devhints.io/react
+* https://docs.npmjs.com/getting-started/publishing-npm-packages
+* https://docs.travis-ci.com/user/languages/javascript-with-nodejs/
+* https://docs.travis-ci.com/user/deployment/npm/
+* https://reacttraining.com/react-router/web/api/Redirect
+* https://www.npmjs.com/package/react-photo-gallery
+* http://neptunian.github.io/react-photo-gallery/examples/lightbox.html
+
