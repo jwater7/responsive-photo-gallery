@@ -32,6 +32,7 @@ function convert(src, dest, width, height, cb) {
       }
 
       sharp(src)
+        .rotate()
         .resize(width, height)
         .crop(sharp.strategy.attention)
         .toFile(dest, (err, info) => {
