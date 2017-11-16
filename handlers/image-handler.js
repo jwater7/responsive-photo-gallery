@@ -61,7 +61,7 @@ class imageHandler {
           if (err) {
             return _cb(image_path);
           }
-          return _cb(thumb_path);
+          _cb(thumb_path);
         });
       }
     }
@@ -81,7 +81,6 @@ class imageHandler {
       });
     }
 
-    let images = {};
     const san_album = sanitize(album);
     const san_thumb = sanitize(thumb);
     // make sure we have valid input
@@ -96,48 +95,56 @@ class imageHandler {
         }
       });
     }
-    let files = [];
+ 
     let album_path = path.join(this.imagePath, san_album);
-    try {
-      files = fs.readdirSync(album_path);
-    } catch(err) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': err.message,
-        }
-      });
-    }
-    
-    var itemsProcessed = 0;
-    files.forEach((file) => {
-      let image_path = path.join(album_path, file);
-      let thumb_path = path.join(this.thumbPath, san_album, san_thumb, file);
-      thumbnailSharp.getPngAndConvert(image_path, thumb_path, san_width, san_height, (err, image_buffer) => {
-        itemsProcessed++;
-        if (err) {
-          return;
-        }
-        images[file] = {
-          base64tag: "data:image/png;base64," + image_buffer.toString('base64'),
-        };
+    fs.readdir(album_path, (err, files) => {
+      if (err) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': err.message,
+          }
+        });
+      }
+      // No files to loop on
+      if (!files.length) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': 'No Files Processed',
+          }
+        });
+      }
+      
+      let images = {};
+      files.forEach((file, fileIndex, fileArray) => {
 
-        if (itemsProcessed >= files.length) {
-          if (!images) {
-            return _cb({
-              'error': {
-                'code': 500,
-                'message': 'No Images Processed',
-              }
+        let image_path = path.join(album_path, file);
+        let thumb_path = path.join(this.thumbPath, san_album, san_thumb, file);
+        thumbnailSharp.getPngAndConvert(image_path, thumb_path, san_width, san_height, (err, image_buffer) => {
+          if (!err) {
+            images[file] = {
+              base64tag: "data:image/png;base64," + image_buffer.toString('base64'),
+            };
+          }
+
+          // Last loop to return
+          if (fileIndex >= fileArray.length-1) {
+            if (Object.keys(images).length === 0) {
+              return _cb({
+                'error': {
+                  'code': 500,
+                  'message': 'No Images Processed',
+                }
+              });
+            }
+            _cb({
+              'result': images,
             });
           }
-          return _cb({
-            'result': images,
-          });
-        }
+        });
       });
     });
-
   }
 
   list(album, _cb) {
@@ -162,70 +169,80 @@ class imageHandler {
         }
       });
     }
-    let files = [];
     let album_path = path.join(this.imagePath, san_album);
-    try {
-      files = fs.readdirSync(album_path);
-    } catch(err) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': err.message,
-        }
-      });
-    }
-    
-    var itemsProcessed = 0;
-    files.forEach((file) => {
-      let image_path = path.join(album_path, file);
-      // get file ctime
-      fs.stat(image_path, (err, stats) => {
-        if (err) {
-            itemsProcessed++;
-            return;
-        }
-        // get file size
-        sharp(image_path)
-          .metadata((err, metadata) => {
-            itemsProcessed++;
-            if(!err) {
+    fs.readdir(album_path, (err, files) => {
+      if (err) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': err.message,
+          }
+        });
+      }
+      // No files to loop on
+      if (!files.length) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': 'No Files Processed',
+          }
+        });
+      }
+
+      files.forEach((file, fileIndex, fileArray) => {
+        let image_path = path.join(album_path, file);
+
+        fs.stat(image_path, (err, stats) => {
+          // Best guess mtime
+          // TODO default value
+          let modifyDate;
+          if (!err) {
               let modifyDate = stats.mtime;
-              let gps = false;
-              if (metadata.exif) {
-                const exifData = exifReader(metadata.exif);
-                if (exifData) {
-                  if(exifData.image.ModifyDate) {
-                    modifyDate = exifData.image.ModifyDate;
-                  }
-                  if(exifData.gps) {
-                    gps = exifData.gps;
+          }
+
+          // get file size
+          sharp(image_path)
+            .metadata((err, metadata) => {
+              if(!err) {
+                let gps = false;
+                if (metadata.exif) {
+                  const exifData = exifReader(metadata.exif);
+                  if (exifData) {
+                    if(exifData.image.ModifyDate) {
+                      modifyDate = exifData.image.ModifyDate;
+                    }
+                    if(exifData.gps) {
+                      gps = exifData.gps;
+                    }
                   }
                 }
+                images[file] = {
+                  description: file,
+                  width: metadata.width,
+                  height: metadata.height,
+                  orientation: metadata.orientation,
+                  modifyDate: modifyDate,
+                  gps: gps,
+                };
               }
-              images[file] = {
-                description: file,
-                width: metadata.width,
-                height: metadata.height,
-                orientation: metadata.orientation,
-                modifyDate: modifyDate,
-                gps: gps,
-              };
-            }
-            // Done - return the info
-            if (itemsProcessed >= files.length) {
-              if (!images) {
-                return _cb({
-                  'error': {
-                    'code': 500,
-                    'message': 'No Images Processed',
-                  }
+
+              // Last loop to return
+              if (fileIndex >= fileArray.length-1) {
+                if (Object.keys(images).length === 0) {
+                  return _cb({
+                    'error': {
+                      'code': 500,
+                      'message': 'No Images Processed',
+                    }
+                  });
+                }
+                _cb({
+                  'result': images,
                 });
               }
-              return _cb({
-                'result': images,
-              });
-            }
-          });
+
+            });
+        });
       });
     });
 
@@ -233,36 +250,39 @@ class imageHandler {
 
   albums(_cb) {
  
-    let dirs = {};
-    let files = [];
-    try {
-      files = fs.readdirSync(this.imagePath);
-    } catch(err) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': err.message,
-        }
-      });
-    }
-    files.forEach((file) => {
-      if (isDirectory(path.join(this.imagePath, file))) {
-        dirs[file] = {description: file};
+    fs.readdir(this.imagePath, (err, files) => {
+      if (err) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': err.message,
+          }
+        });
       }
-    });
-    if (!dirs) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'No Albums Processed',
+      // No files to loop on
+      if (!files.length) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': 'No Albums Processed',
+          }
+        });
+      }
+
+      let dirs = {};
+      files.forEach((file, fileIndex, fileArray) => {
+        if (isDirectory(path.join(this.imagePath, file))) {
+          dirs[file] = {description: file};
+        }
+        // Last loop to return
+        if (fileIndex >= fileArray.length-1) {
+          _cb({
+            'result': dirs,
+          });
         }
       });
-    }
-    return _cb({
-      'result': dirs,
     });
   }
-
 }
 
 module.exports = imageHandler;
