@@ -1,3 +1,5 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
 
 // TODO pass in
 var api_prefix = '';
@@ -75,6 +77,20 @@ const API = {
     //  },
     //})
     fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album)
+      .then(res => res.json())
+      .then(jsonData => {
+        if (jsonData.error) {
+          console.log('LIST ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          return;
+        }
+        _cb(jsonData.result);
+      })
+      // TODO debug log
+      .catch(error => console.log('FETCH ERROR: ' + error.message));
+  },
+
+  thumbnails: (_cb, opts) => {
+    fetch(api_prefix + '/thumbnails?token=' + opts.token + '&album=' + opts.album + '&thumb=' + opts.thumb)
       .then(res => res.json())
       .then(jsonData => {
         if (jsonData.error) {

@@ -8,6 +8,7 @@ import PublicRoute from './PublicRoute';
 import Login from './Login';
 import Logout from './Logout';
 import Landing from './Landing';
+import Albums from './Albums';
 import List from './List';
 
 const AppMain = (props) => (
@@ -15,6 +16,7 @@ const AppMain = (props) => (
     <Switch>
       <Route exact name="landing" path="/" component={Landing} />
       <AuthenticatedRoute exact path="/list" component={List} {...props} />
+      <AuthenticatedRoute exact path="/albums" component={Albums} {...props} />
       <PublicRoute path="/login" component={Login} {...props} />
       <AuthenticatedRoute path="/logout" component={Logout} {...props} />
       <Route component={NotFound} />

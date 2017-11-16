@@ -7,7 +7,7 @@ const PublicRoute = ({ authtoken, component, updateAuthCB, ...rest }) => (
     //if (authtoken) return <div></div>;
     return !authtoken ?
     (React.createElement(component, { ...props, authtoken, updateAuthCB })) :
-    (<Redirect to="/list" />);
+    (<Redirect to="/albums" />);
   }} />
 );
 

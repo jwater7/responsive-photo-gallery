@@ -54,7 +54,7 @@ class List extends Component {
         continue;
       }
       let thumburl = API.appendThumbnail(imageurl, {
-        size: '50x50',
+        size: '40x40',
       })
       let imageobj = {src: thumburl, width: 1, height: 1, orig: imageurl};
       //let imageobj = {src: thumburl, width: this.state.files[filename].width, height: this.state.files[filename].height};
