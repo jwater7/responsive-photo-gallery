@@ -1,3 +1,6 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
+
 var express = require('express');
 var path = require('path');
 var favicon = require('serve-favicon');

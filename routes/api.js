@@ -1,3 +1,6 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
+
 var express = require('express');
 var router = express.Router();
 
@@ -162,8 +165,6 @@ router.get('/albums', auth.required, function(req, res, next) {
  *   get:
  *     description: Returns list of files
  *       Authentication token for requested info is required
- *     consumes:
- *       - application/json
  *     produces:
  *       - application/json
  *     parameters:
@@ -239,6 +240,55 @@ router.get('/image', auth.required, function(req, res, next) {
   handler.image(album, image, thumb, (image_full_path) => {
     res.download(image_full_path);
   });
+
+});
+
+/**
+ * @swagger
+ * /thumbnails:
+ *   get:
+ *     description: Get base64 encoded images in json format for thumbnails
+ *       Authentication token for requested info is required
+ *     produces:
+ *       - application/json
+ *     parameters:
+ *       - name: album
+ *         in: query
+ *         description: Album name
+ *         schema:
+ *           type: string
+ *           required: true
+ *       - name: thumb
+ *         in: query
+ *         description: an optional thumb dimension (e.g. "50x50")
+ *         schema:
+ *           type: string
+ *           required: false
+ *     responses:
+ *       200:
+ *         description: Returns JSON list
+ *       401:
+ *         description: Authentication Required
+ *       500:
+ *         description: Internal server error
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.get('/thumbnails', auth.required, function(req, res, next) {
+
+  var album = req.query.album;
+  let thumb = req.query.thumb;
+
+  function cb(args) {
+    if (args.error || !args.result) {
+      res.status(500);
+    } else {
+      res.status(200);
+    }
+    res.json(args);
+    res.end();
+  }
+  handler.thumbnails(album, thumb, cb);
 
 });
 

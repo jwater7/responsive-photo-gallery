@@ -1,3 +1,7 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
+
+'use strict'
 
 const fs = require('fs');
 const path = require('path');
@@ -37,5 +41,24 @@ function convert(src, dest, width, height, cb) {
   });
 }
 
-module.exports.convert = convert;
+function getPngAndConvert(src, dest, width, height, cb) {
+
+  convert(src, dest, width, height, (err) => {
+    if (err) {
+      return cb(err, undefined);
+    }
+    fs.readFile(dest, (err, data) => {
+      if (err) {
+        return cb(err, undefined);
+      }
+      return cb(undefined, new Buffer(data));
+    });
+  });
+
+}
+
+module.exports = {
+  getPngAndConvert,
+  convert,
+};
 
