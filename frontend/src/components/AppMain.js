@@ -15,7 +15,7 @@ const AppMain = (props) => (
   <Grid>
     <Switch>
       <Route exact name="landing" path="/" component={Landing} />
-      <AuthenticatedRoute exact path="/list" component={List} {...props} />
+      <AuthenticatedRoute path="/list" component={List} {...props} />
       <AuthenticatedRoute exact path="/albums" component={Albums} {...props} />
       <PublicRoute path="/login" component={Login} {...props} />
       <AuthenticatedRoute path="/logout" component={Logout} {...props} />

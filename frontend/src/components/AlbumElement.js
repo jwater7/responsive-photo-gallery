@@ -33,7 +33,7 @@ class AlbumElement extends Component {
       if(!thumburl) {
         continue;
       }
-      let imageobj = {src: thumburl, width: 1, height: 1};
+      let imageobj = {key: thumbkey, src: thumburl, width: 1, height: 1};
       imagelist.push(imageobj);
     }
     if (!imagelist) {
