@@ -1,62 +1,44 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
+
 import React, { Component } from 'react';
 import API from '../api';
 import Gallery from 'react-photo-gallery';
 
 class List extends Component {
 
-  state = {
-    albums: {},
-    files: {},
-  };
-
   componentDidMount() {
 
-    API.albums((albums) => {
-      this.setState({
-        albums: albums,
-      })
+    if (!(this.props.match.params.album in this.props.list)) {
+      this.props.loadList(this.props.match.params.album, this.props.authtoken);
+    }
 
-      let first = Object.keys(albums)[0];
-      if (!first) {
-        return;
-      }
-
-      API.list((files) => {
-        this.setState({
-          files: files,
-        })
-      }, {
-        token: this.props.authtoken,
-        album: first,
-      });
-
-    }, {
-      token: this.props.authtoken,
-    });
-
+    if (!(this.props.match.params.album in this.props.thumbs)) {
+      this.props.addThumbs(this.props.match.params.album, this.props.authtoken);
+    }
   }
 
   photos = () => {
-    let first = Object.keys(this.state.albums)[0];
-    if (!first) {
+    if (!this.props.match.params.album) {
+      return [];
+    }
+    if (!(this.props.match.params.album in this.props.thumbs) || !(this.props.match.params.album in this.props.list)) {
       return [];
     }
     let imagelist = [];
-    let filelist = Object.keys(this.state.files);
+    let filelist = Object.keys(this.props.list[this.props.match.params.album]);
     for (let i = 0; i < filelist.length; i++) {
       let filename = filelist[i];
       let imageurl = API.imageurl({
         token: this.props.authtoken,
-        album: first,
+        album: this.props.match.params.album,
         image: filename,
       })
       if(!imageurl) {
         continue;
       }
-      let thumburl = API.appendThumbnail(imageurl, {
-        size: '40x40',
-      })
-      let imageobj = {src: thumburl, width: 1, height: 1, orig: imageurl};
+      let thumburl = this.props.thumbs[this.props.match.params.album][filename].base64tag;
+      let imageobj = {key: filename, src: thumburl, width: 1, height: 1, orig: imageurl};
       //let imageobj = {src: thumburl, width: this.state.files[filename].width, height: this.state.files[filename].height};
       imagelist.push(imageobj);
     }
@@ -75,7 +57,7 @@ class List extends Component {
   render() {
     return (
       <div>
-        <h1>List:</h1>
+        <h1>List for {this.props.match.params.album}:</h1>
         <Gallery columns={30} margin={.5} photos={this.photos()} onClick={this.handleOnClick} />
         {/*<Gallery columns={10} photos={this.photos()} />*/}
         {/*<Gallery columns={4} photos={this.photos()} />*/}

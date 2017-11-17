@@ -2,34 +2,25 @@
 //
 
 import React, { Component } from 'react';
-import API from '../api';
 import Gallery from 'react-photo-gallery';
 
 class AlbumElement extends Component {
 
-  state = {
-    thumbs: {},
-  };
-
   componentDidMount() {
 
-    API.thumbnails((thumbs) => {
-      this.setState({
-        thumbs: thumbs,
-      })
-    }, {
-      token: this.props.authtoken,
-      album: this.props.album,
-      thumb: '40x40',
-    });
+    this.props.addThumbs(this.props.album, this.props.authtoken);
+
   }
 
   photos = () => {
+    if (!(this.props.album in this.props.thumbs)) {
+      return [];
+    }
     let imagelist = [];
-    let thumbs = Object.keys(this.state.thumbs);
+    let thumbs = Object.keys(this.props.thumbs[this.props.album]);
     for (let i = 0; i < thumbs.length; i++) {
       let thumbkey = thumbs[i];
-      let thumburl = this.state.thumbs[thumbkey].base64tag;
+      let thumburl = this.props.thumbs[this.props.album][thumbkey].base64tag;
       if(!thumburl) {
         continue;
       }

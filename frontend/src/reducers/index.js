@@ -4,14 +4,17 @@
 import { combineReducers } from 'redux';
 
 import {
-  UPDATE_THUMBNAILS,
+  ADD_THUMBS,
   UPDATE_ALBUMS,
+  ADD_LIST,
 } from '../actions'
 
-const thumbnails = (state = {}, action) => {
+const thumbs = (state = {}, action) => {
   switch (action.type) {
-    case UPDATE_THUMBNAILS:
-      return action.thumbs;
+    case ADD_THUMBS:
+      let newThumbs = Object.assign({}, state);
+      newThumbs[action.album] = action.thumbs;
+      return (newThumbs);
     default:
       return state;
   }
@@ -26,9 +29,21 @@ const albums = (state = {}, action) => {
   }
 }
 
+const list = (state = {}, action) => {
+  switch (action.type) {
+    case ADD_LIST:
+      let newList = Object.assign({}, state);
+      newList[action.album] = action.list;
+      return (newList);
+    default:
+      return state;
+  }
+}
+
 const reducers = combineReducers({
-  thumbnails,
+  thumbs,
   albums,
+  list,
 });
 
 export default reducers;

@@ -3,14 +3,16 @@
 
 // Action types
 
-export const UPDATE_THUMBNAILS = 'UPDATE_THUMBNAILS';
+export const ADD_THUMBS = 'ADD_THUMBS';
 export const UPDATE_ALBUMS = 'UPDATE_ALBUMS';
+export const ADD_LIST = 'ADD_LIST';
 
 // Action creators
 
-export const updateThumbnails = (thumbs) => {
+export const addThumbs = (album, thumbs) => {
   return {
-    type: UPDATE_THUMBNAILS,
+    type: ADD_THUMBS,
+    album,
     thumbs,
   };
 }
@@ -19,6 +21,14 @@ export const updateAlbums = (albums) => {
   return {
     type: UPDATE_ALBUMS,
     albums,
+  };
+}
+
+export const addList = (album, list) => {
+  return {
+    type: ADD_LIST,
+    album,
+    list,
   };
 }
 

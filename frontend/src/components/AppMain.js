@@ -9,13 +9,13 @@ import Login from './Login';
 import Logout from './Logout';
 import Landing from './Landing';
 import AlbumsContainer from './AlbumsContainer';
-import List from './List';
+import ListContainer from './ListContainer';
 
 const AppMain = (props) => (
   <Grid>
     <Switch>
       <Route exact name="landing" path="/" component={Landing} />
-      <AuthenticatedRoute path="/list" component={List} {...props} />
+      <AuthenticatedRoute path="/list/:album" component={ListContainer} {...props} />
       <AuthenticatedRoute exact path="/albums" component={AlbumsContainer} {...props} />
       <PublicRoute path="/login" component={Login} {...props} />
       <AuthenticatedRoute path="/logout" component={Logout} {...props} />
