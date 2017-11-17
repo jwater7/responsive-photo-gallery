@@ -49,4 +49,5 @@ Useful links:
 * https://reacttraining.com/react-router/web/api/Redirect
 * https://www.npmjs.com/package/react-photo-gallery
 * http://neptunian.github.io/react-photo-gallery/examples/lightbox.html
+* https://redux.js.org/docs/basics/ExampleTodoList.html
 
