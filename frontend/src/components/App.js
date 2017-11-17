@@ -1,3 +1,6 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
+
 import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import Cookies from 'universal-cookie';

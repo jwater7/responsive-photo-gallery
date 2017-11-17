@@ -25,6 +25,11 @@ npm install -g create-react-app
 create-react-app frontend
 ~~~~
 
+Add redux:
+~~~~
+npm install react-redux redux -S
+~~~~
+
 This was useful help on express middleware chains
 https://stormpath.com/blog/how-to-write-middleware-for-express-apps
 
