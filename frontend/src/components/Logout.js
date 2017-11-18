@@ -19,6 +19,8 @@ class Logout extends React.Component {
     }, {
       token: this.props.authtoken,
     });
+    // TODO fix api - Clear it anyway when we get a 401
+    this.props.updateAuthCB(false);
   }
 
   componentDidMount() {
