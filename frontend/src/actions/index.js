@@ -9,11 +9,12 @@ export const ADD_LIST = 'ADD_LIST';
 
 // Action creators
 
-export const addThumbs = (album, thumbs) => {
+export const addThumbs = (album, thumbs, dimension) => {
   return {
     type: ADD_THUMBS,
     album,
     thumbs,
+    dimension,
   };
 }
 

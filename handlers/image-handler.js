@@ -135,6 +135,7 @@ class imageHandler {
         thumbnailSharp.getPngAndConvert(image_path, thumb_path, san_width, san_height, (err, image_buffer) => {
           if (!err) {
             images[file] = {
+              // TODO: these are not necessarily png files
               base64tag: "data:image/png;base64," + image_buffer.toString('base64'),
             };
           }

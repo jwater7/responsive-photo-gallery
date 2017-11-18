@@ -12,8 +12,11 @@ import {
 const thumbs = (state = {}, action) => {
   switch (action.type) {
     case ADD_THUMBS:
+      // thumbs = {'album': {'dimension': {data} } }
       let newThumbs = Object.assign({}, state);
-      newThumbs[action.album] = action.thumbs;
+      let newAlbum = Object.assign({}, state[action.album]);
+      newThumbs[action.album] = newAlbum;
+      newThumbs[action.album][action.dimension] = action.thumbs;
       return (newThumbs);
     default:
       return state;

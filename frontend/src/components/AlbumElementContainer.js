@@ -14,14 +14,14 @@ const mapStateToProps = (state) => {
 
 const mapDispatchToProps = (dispatch) => {
   return {
-    addThumbs: (album, authtoken) => {
+    addThumbs: (album, dim, authtoken) => {
 
       API.thumbnails((thumbs) => {
-        dispatch(addThumbs(album, thumbs));
+        dispatch(addThumbs(album, thumbs, dim));
       }, {
         token: authtoken,
         album: album,
-        thumb: '40x40',
+        thumb: dim,
       });
     },
   }

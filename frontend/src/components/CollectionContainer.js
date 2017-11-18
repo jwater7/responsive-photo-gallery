@@ -3,12 +3,11 @@
 
 import { connect } from 'react-redux';
 import API from '../api';
-import List from './List';
-import { addList, addThumbs } from '../actions';
+import Collection from './Collection';
+import { addList } from '../actions';
 
 const mapStateToProps = (state) => {
   return {
-    thumbs: state.thumbs,
     list: state.list,
   }
 }
@@ -24,23 +23,13 @@ const mapDispatchToProps = (dispatch) => {
         album: album,
       });
     },
-    addThumbs: (album, dim, authtoken) => {
-
-      API.thumbnails((thumbs) => {
-        dispatch(addThumbs(album, thumbs, dim));
-      }, {
-        token: authtoken,
-        album: album,
-        thumb: dim,
-      });
-    },
   }
 }
 
-const ListContainer = connect(
+const CollectionContainer = connect(
   mapStateToProps,
   mapDispatchToProps,
-)(List);
+)(Collection);
 
-export default ListContainer;
+export default CollectionContainer;
 
