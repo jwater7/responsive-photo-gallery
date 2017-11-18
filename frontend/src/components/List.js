@@ -37,6 +37,9 @@ class List extends Component {
       if(!imageurl) {
         continue;
       }
+      if (!(filename in this.props.thumbs[this.props.match.params.album])) {
+        continue;
+      }
       let thumburl = this.props.thumbs[this.props.match.params.album][filename].base64tag;
       let imageobj = {key: filename, src: thumburl, width: 1, height: 1, orig: imageurl};
       //let imageobj = {src: thumburl, width: this.state.files[filename].width, height: this.state.files[filename].height};

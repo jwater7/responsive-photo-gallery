@@ -8,7 +8,9 @@ class AlbumElement extends Component {
 
   componentDidMount() {
 
-    this.props.addThumbs(this.props.album, this.props.authtoken);
+    if (!(this.props.album in this.props.thumbs)) {
+      this.props.addThumbs(this.props.album, this.props.authtoken);
+    }
 
   }
 

@@ -9,7 +9,9 @@ class Albums extends Component {
 
   componentDidMount() {
 
-    this.props.loadAlbums(this.props.authtoken);
+    if (Object.keys(this.props.albums).length === 0) {
+      this.props.loadAlbums(this.props.authtoken);
+    }
 
   }
 

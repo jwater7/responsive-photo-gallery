@@ -6,6 +6,17 @@
 const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
+/* 
+// Alternative to sanitize
+const sanitizeToRoot = (rootDir, subDir) => {
+  var s = path.resolve(path.join(path.resolve(rootDir), path.normalize(subDir)));
+  if (s.startsWith(path.resolve(rootDir))) {
+    return s;
+  }
+  return '';
+}
+*/
+
 
 var sharp = require('sharp');
 sharp.cache(false);
