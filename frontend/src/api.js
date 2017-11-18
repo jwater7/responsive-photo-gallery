@@ -2,7 +2,14 @@
 //
 
 // TODO pass in
-var api_prefix = process.env.REACT_APP_BASENAME || '';
+var base_prefix = '';
+if (process.env.REACT_APP_BASENAME) {
+  base_prefix = process.env.REACT_APP_BASENAME;
+  if (base_prefix.substr(-1) !== '/') {
+    base_prefix += '/';
+  }
+}
+var api_prefix = base_prefix || '';
 if (process.env.REACT_APP_API_PREFIX) {
   api_prefix = process.env.REACT_APP_API_PREFIX;
   if (api_prefix.substr(-1) !== '/') {
