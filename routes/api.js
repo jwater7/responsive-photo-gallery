@@ -237,8 +237,16 @@ router.get('/image', auth.required, function(req, res, next) {
   let image = req.query.image;
   let thumb = req.query.thumb;
 
-  handler.image(album, image, thumb, (image_full_path) => {
-    res.download(image_full_path);
+  handler.image(album, image, thumb, (err, image_buffer, content_type) => {
+    if (err) {
+      res.status(500);
+      res.json(err);
+      res.end();
+      return;
+    }
+    res.set('Content-Type', content_type);
+    res.send(image_buffer);
+    res.end();
   });
 
 });
