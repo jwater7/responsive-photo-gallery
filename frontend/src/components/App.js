@@ -15,7 +15,7 @@ const title = 'Responsive Photo Gallery';
 const cookies = new Cookies();
 
 // TODO pass in
-var basename = process.env.PUBLIC_URL;
+var basename = '/';
 if (process.env.REACT_APP_BASENAME) {
   basename = process.env.REACT_APP_BASENAME;
   if (basename.substr(-1) !== '/') {
