@@ -4,12 +4,58 @@
 import { connect } from 'react-redux';
 import API from '../api';
 import List from './List';
-import { addList, addThumbs } from '../actions';
+import { addList, addThumbs, addCollectionMap } from '../actions';
+
+const createCollectionObjectForListItem = (item) => {
+  let mtime = item.modifyDate;
+  if (!mtime) {
+    return {collection: 'UNKNOWN', filter: ''};
+  }
+  let mdate = new Date(mtime);
+  let month = mdate.getMonth();
+  let monthstr = month.toString();
+  let year = mdate.getFullYear();
+  let yearstr = year.toString();
+  let collection = year + '.' + ('0' + (month + 1)).slice(-2);
+  var obj = {
+    collection,
+    filter: JSON.stringify({month: monthstr, year: yearstr}),
+    month,
+    year,
+  }
+  return obj;
+}
+
+const loadCollectionMap = (album, list) => {
+
+  //populate collectionMap
+  let filelist = Object.keys(list);
+  var collectionMap = {};
+  for (let i = 0; i < filelist.length; i++) {
+    let filename = filelist[i];
+    let collectionItem = createCollectionObjectForListItem(list[filename]);
+    // Make the list if it doesnt exist yet
+    if (!collectionMap[collectionItem.collection]) {
+      collectionMap[collectionItem.collection] = {
+        filter: collectionItem.filter,
+        description: (collectionItem.month + 1) + '/' + collectionItem.year,
+        items: [],
+      };
+    }
+    // add to the list
+    collectionMap[collectionItem.collection].items.push(filename);
+  }
+
+  // {collection: {description, filter, items: ['filename', ...]}, ...}
+  return collectionMap;
+
+}
 
 const mapStateToProps = (state) => {
   return {
     thumbs: state.thumbs,
     list: state.list,
+    collectionMap: state.collectionMap,
   }
 }
 
@@ -19,6 +65,8 @@ const mapDispatchToProps = (dispatch) => {
 
       API.list((list) => {
         dispatch(addList(album, list));
+        var collectionMap = loadCollectionMap(album, list);
+        dispatch(addCollectionMap(album, collectionMap));
       }, {
         token: authtoken,
         album: album,

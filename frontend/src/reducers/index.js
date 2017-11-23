@@ -7,6 +7,7 @@ import {
   ADD_THUMBS,
   UPDATE_ALBUMS,
   ADD_LIST,
+  ADD_COLLECTION_MAP,
 } from '../actions'
 
 const thumbs = (state = {}, action) => {
@@ -43,10 +44,22 @@ const list = (state = {}, action) => {
   }
 }
 
+const collectionMap = (state = {}, action) => {
+  switch (action.type) {
+    case ADD_COLLECTION_MAP:
+      let newList = Object.assign({}, state);
+      newList[action.album] = action.collectionMap;
+      return (newList);
+    default:
+      return state;
+  }
+}
+
 const reducers = combineReducers({
   thumbs,
   albums,
   list,
+  collectionMap,
 });
 
 export default reducers;

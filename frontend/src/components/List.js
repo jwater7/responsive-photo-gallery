@@ -6,16 +6,6 @@ import { Link } from 'react-router-dom';
 import API from '../api';
 import Gallery from 'react-photo-gallery';
 
-const getMonthForListItem = (item) => {
-  let mtime = item.modifyDate;
-  if (!mtime) {
-    return 'UNKNOWN';
-  }
-  let mdate = new Date(mtime);
-  let month = mdate.getMonth();
-  return month.toString();
-}
-
 class List extends Component {
 
   thumbDim = '100x100';
@@ -29,31 +19,12 @@ class List extends Component {
     if (!(this.props.match.params.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.match.params.album])) {
       this.props.addThumbs(this.props.match.params.album, this.thumbDim, this.props.authtoken);
     }
+
   }
 
-  getMonthMap = () => {
+  photos = (collectionItems = undefined) => {
 
-    if (!this.props.match.params.album) {
-      return {};
-    }
-    const alb = this.props.match.params.album;
-
-    let monthMap = {};
-    if (alb in this.props.list) {
-      let filelist = Object.keys(this.props.list[alb]);
-      for (let i = 0; i < filelist.length; i++) {
-        let filename = filelist[i];
-        let month = getMonthForListItem(this.props.list[alb][filename]);
-        monthMap[month] = true;
-      }
-    }
-
-    return monthMap;
-  }
-
-  photos = (month = undefined) => {
-
-    if (month === undefined) {
+    if (collectionItems === undefined) {
       return [];
     }
 
@@ -65,12 +36,8 @@ class List extends Component {
       return [];
     }
     let imagelist = [];
-    let filelist = Object.keys(this.props.list[alb]);
-    for (let i = 0; i < filelist.length; i++) {
-      let filename = filelist[i];
-      if(getMonthForListItem(this.props.list[alb][filename]) !== month) {
-        continue;
-      }
+    for (let i = 0; i < collectionItems.length; i++) {
+      let filename = collectionItems[i];
       let imageurl = API.imageurl({
         token: this.props.authtoken,
         album: alb,
@@ -92,19 +59,26 @@ class List extends Component {
     return(imagelist);
   }
 
+  getCollectionMapForAlbum = (album) => {
+    if (!(album in this.props.collectionMap)) {
+      return {};
+    }
+    return this.props.collectionMap[album];
+  }
+
   render() {
-    const monthMap = this.getMonthMap();
+    const collectionMap = this.getCollectionMapForAlbum(this.props.match.params.album);
     return (
       <div>
         <h1>List for {this.props.match.params.album}:</h1>
-        {Object.keys(monthMap).map((month) => (
-          <Link key={month} to={{
+        {Object.keys(collectionMap).sort().map((collectionKey) => (
+          <Link key={collectionKey} to={{
             pathname: `/collection/${this.props.match.params.album}`,
-            search: '?filter=' + JSON.stringify({month: month}),
+            search: '?filter=' + collectionMap[collectionKey].filter,
             /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
           }}>
-            <h2>Collection for {month}:</h2>
-            <Gallery columns={10} margin={.5} photos={this.photos(month)} />
+            <h2>Collection for {collectionMap[collectionKey].description}:</h2>
+            <Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />
           </Link>
         ))}
       </div>

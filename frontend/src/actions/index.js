@@ -6,6 +6,7 @@
 export const ADD_THUMBS = 'ADD_THUMBS';
 export const UPDATE_ALBUMS = 'UPDATE_ALBUMS';
 export const ADD_LIST = 'ADD_LIST';
+export const ADD_COLLECTION_MAP = 'ADD_COLLECTION_MAP';
 
 // Action creators
 
@@ -30,6 +31,14 @@ export const addList = (album, list) => {
     type: ADD_LIST,
     album,
     list,
+  };
+}
+
+export const addCollectionMap = (album, collectionMap) => {
+  return {
+    type: ADD_COLLECTION_MAP,
+    album,
+    collectionMap,
   };
 }
 
