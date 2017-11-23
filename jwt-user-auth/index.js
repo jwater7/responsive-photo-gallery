@@ -20,14 +20,14 @@ class jwtUserAuth {
     // Check DB Version
     try {
       let ver = this.db.getData('/dbVersion');
-      if (ver !== 0) {
+      if (ver !== '0') {
         throw (new Error('version mismatch'))
       }
     } catch(e) {
       // Initialize Database
       let password = process.env.DEFAULT_PASSWORD || crypto.randomBytes(3*4).toString('base64');
     // TODO need to hash to keep safe
-      this.db.push('/dbVersion', 0);
+      this.db.push('/dbVersion', '0');
       this.db.push('/users', {
         'admin': {
           password,
