@@ -19,10 +19,6 @@ const sanitizeToRoot = (rootDir, subDir) => {
 
 const thumbnailSharp = require('../thumbnail-sharp/index');
 
-const isDirectory = source => fs.lstatSync(source).isDirectory()
-
-//const getDirectories = source => fs.readdirSync(source).map(name => path.join(source, name)).filter(isDirectory)
-
 const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
 
   const [ width, height ] = thumb.split('x');
@@ -311,20 +307,15 @@ class imageHandler {
       let done = 0;
       for (let i = 0; i < files.length; i++) {
         let file = files[i];
-        if (isDirectory(path.join(this.imagePath, file))) {
+        if (fs.statSync(path.join(this.imagePath, file)).isDirectory()) {
           dirs[file] = {description: file};
         }
-
-        // Increment processing counter
-        done++;
-
-        // Last loop to return
-        if (done >= files.length) {
-          return _cb({
-            'result': dirs,
-          });
-        }
       }
+
+      return _cb({
+        'result': dirs,
+      });
+
     });
   }
 }
