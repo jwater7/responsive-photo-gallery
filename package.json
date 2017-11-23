@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node ./bin/www",
     "debug": "IMAGE_PATH=./debug-data/pics AUTH_PATH=./debug-data/data/auth THUMB_PATH=./debug-data/data/thumbs PRIVATE_KEY=nonvolatile PORT=8000 DEBUG=express,responsive-photo-gallery:* npm start",
-    "build-debug-frontend": "PUBLIC_URL=./ npm run build-frontend",
+    "build-debug-frontend": "PUBLIC_URL=/ npm run build-frontend",
     "build-frontend": "cd frontend; npm run build; cd .."
   },
   "dependencies": {

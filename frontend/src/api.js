@@ -3,6 +3,12 @@
 
 // TODO pass in
 var base_prefix = '';
+if (process.env.PUBLIC_URL) {
+  base_prefix = process.env.PUBLIC_URL;
+  if (base_prefix.substr(-1) !== '/') {
+    base_prefix += '/';
+  }
+}
 if (process.env.REACT_APP_BASENAME) {
   base_prefix = process.env.REACT_APP_BASENAME;
   if (base_prefix.substr(-1) !== '/') {
