@@ -3,23 +3,48 @@
 
 'use strict'
 
-// Inspired by:
-// https://medium.freecodecamp.org/how-to-make-authentication-easier-with-json-web-token-cc15df3f2228
-// https://github.com/louischatriot/nedb
-// https://github.com/scotch-io/node-token-authentication/blob/master/server.js
-// https://scotch.io/tutorials/authenticate-a-node-js-api-with-json-web-tokens
-// https://gist.github.com/smebberson/1581536
-
-var Datastore = require('nedb');
 var jwt = require('jsonwebtoken');
+const JsonDB = require('node-json-db');
+const crypto = require("crypto");
 
 const debug = require('debug')('responsive-photo-gallery:server');
 
 class jwtUserAuth {
-  constructor(dbPath, privateKey) {
+
+  constructor(dbPath) {
+
     this.dbPath = dbPath;
-    this.privateKey = privateKey;
-    this.db = new Datastore({ filename: dbPath + '/db', autoload: true });
+    // Save after each push = true, save in human readable format = true
+    this.db = new JsonDB(dbPath + '/config.json', true, true);
+
+    // Check DB Version
+    try {
+      let ver = this.db.getData('/dbVersion');
+      if (ver !== 0) {
+        throw (new Error('version mismatch'))
+      }
+    } catch(e) {
+      // Initialize Database
+      let password = process.env.DEFAULT_PASSWORD || crypto.randomBytes(3*4).toString('base64');
+    // TODO need to hash to keep safe
+      this.db.push('/dbVersion', 0);
+      this.db.push('/users', {
+        'admin': {
+          password,
+          'hashed': false,
+          'admin': true,
+        }
+      });
+    }
+
+    this.users = [];
+    try { this.users = this.db.getData('/users'); } catch(e) {}
+
+    // Autogenerate each instance, but save in text for reference
+    this.privateKey = process.env.PRIVATE_KEY || crypto.randomBytes(3*4).toString('base64')
+    // TODO need to keep safe
+    try { this.db.push('/privateKey', this.privateKey); } catch(e) {}
+
     this.keyBlackList = {};
 
     // retain "this"
@@ -60,8 +85,9 @@ class jwtUserAuth {
   }
 
   login(username, password) {
-    if (username == 'TODOadmin' && password == 'TODOpassword') {
-      return jwt.sign({ 'user': username, 'admin': true }, this.privateKey, {
+    if (this.users[username].password == password) {
+      //console.log("login: " + username);
+      return jwt.sign({ 'user': username, 'admin': this.users[username].admin }, this.privateKey, {
         expiresIn: 86400 // expires in 24 hours
       });
     }

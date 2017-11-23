@@ -6,9 +6,7 @@ var router = express.Router();
 
 const jwtAuth = require('../jwt-user-auth/index');
 const auth_path = process.env.AUTH_PATH || '/data/auth';
-const crypto = require("crypto");
-var private_key = process.env.PRIVATE_KEY || crypto.randomBytes(3*4).toString('base64')
-var auth = new jwtAuth(auth_path, private_key);
+var auth = new jwtAuth(auth_path);
 
 const imageHandler = require('../handlers/image-handler');
 const image_path = process.env.IMAGE_PATH || '/images';

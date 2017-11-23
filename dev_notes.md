@@ -51,3 +51,10 @@ Useful links:
 * http://neptunian.github.io/react-photo-gallery/examples/lightbox.html
 * https://redux.js.org/docs/basics/ExampleTodoList.html
 
+JWT:
+* https://medium.freecodecamp.org/how-to-make-authentication-easier-with-json-web-token-cc15df3f2228
+* https://github.com/louischatriot/nedb
+* https://github.com/scotch-io/node-token-authentication/blob/master/server.js
+* https://scotch.io/tutorials/authenticate-a-node-js-api-with-json-web-tokens
+* https://gist.github.com/smebberson/1581536
+

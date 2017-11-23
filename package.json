@@ -16,7 +16,7 @@
     "express": "~4.15.5",
     "jsonwebtoken": "^8.1.0",
     "morgan": "~1.9.0",
-    "nedb": "^1.8.0",
+    "node-json-db": "^0.7.3",
     "pug": "2.0.0-beta11",
     "sanitize-filename": "^1.6.1",
     "serve-favicon": "~2.4.5",
