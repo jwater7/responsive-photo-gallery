@@ -2,7 +2,8 @@
 //
 
 import React, { Component } from 'react';
-import Gallery from 'react-photo-gallery';
+//import Gallery from 'react-photo-gallery';
+import ImageList from './ImageList';
 
 class AlbumElement extends Component {
 
@@ -17,6 +18,8 @@ class AlbumElement extends Component {
   }
 
   photos = () => {
+
+    const [width, height] = this.thumbDim.split('x');
     if (!(this.props.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.album])) {
       return [];
     }
@@ -28,7 +31,7 @@ class AlbumElement extends Component {
       if(!thumburl) {
         continue;
       }
-      let imageobj = {key: thumbkey, src: thumburl, width: 1, height: 1};
+      let imageobj = {key: thumbkey, src: thumburl, width, height};
       imagelist.push(imageobj);
     }
     if (!imagelist) {
@@ -40,7 +43,8 @@ class AlbumElement extends Component {
   render() {
     return (
       <div>
-        <Gallery columns={30} margin={.5} photos={this.photos()} />
+        <ImageList photos={this.photos()} />
+        {/*<Gallery columns={30} margin={.5} photos={this.photos()} />*/}
       </div>
     );
   }

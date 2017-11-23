@@ -3,7 +3,8 @@
 
 import React, { Component } from 'react';
 import API from '../api';
-import Gallery from 'react-photo-gallery';
+//import Gallery from 'react-photo-gallery';
+import ImageList from './ImageList';
 
 const passDateFilter = (filter, mtime) => {
   if (filter.year) {
@@ -75,7 +76,8 @@ class List extends Component {
       if(!imageurl) {
         continue;
       }
-      let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].width, height: this.props.list[alb][filename].height};
+      let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
+      //let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].width, height: this.props.list[alb][filename].height};
       imagelist.push(imageobj);
     }
     if (!imagelist) {
@@ -86,15 +88,17 @@ class List extends Component {
 
   handleOnClick = (e, obj) => {
     //console.log(e.target);
+    window.open(e.target.src);
     //console.log(obj);
-    window.open(obj.photo.src);
+    //window.open(obj.photo.src);
   }
 
   render() {
     return (
       <div>
         <h1>Collection for {this.props.match.params.album}:</h1>
-        <Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />
+        {/*<Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />*/}
+        <ImageList photos={this.photos()} onClick={this.handleOnClick} />
       </div>
     );
   }

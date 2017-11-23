@@ -4,7 +4,8 @@
 import React, { Component } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../api';
-import Gallery from 'react-photo-gallery';
+//import Gallery from 'react-photo-gallery';
+import ImageList from './ImageList';
 
 class List extends Component {
 
@@ -23,6 +24,8 @@ class List extends Component {
   }
 
   photos = (collectionItems = undefined) => {
+
+    const [width, height] = this.thumbDim.split('x');
 
     if (collectionItems === undefined) {
       return [];
@@ -50,7 +53,7 @@ class List extends Component {
         continue;
       }
       let thumburl = this.props.thumbs[alb][this.thumbDim][filename].base64tag;
-      let imageobj = {key: filename, src: thumburl, width: 1, height: 1, orig: imageurl};
+      let imageobj = {key: filename, src: thumburl, width, height, orig: imageurl};
       imagelist.push(imageobj);
     }
     if (!imagelist) {
@@ -78,7 +81,8 @@ class List extends Component {
             /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
           }}>
             <h2>Collection for {collectionMap[collectionKey].description}:</h2>
-            <Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />
+            <ImageList photos={this.photos(collectionMap[collectionKey].items)} />
+            {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
           </Link>
         ))}
       </div>
