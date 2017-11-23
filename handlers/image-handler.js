@@ -6,8 +6,10 @@
 const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
-/* 
-// Alternative to sanitize
+
+const thumbnailSharp = require('../thumbnail-sharp/index');
+
+// Alternative to sanitize for paths
 const sanitizeToRoot = (rootDir, subDir) => {
   var s = path.resolve(path.join(path.resolve(rootDir), path.normalize(subDir)));
   if (s.startsWith(path.resolve(rootDir))) {
@@ -15,9 +17,18 @@ const sanitizeToRoot = (rootDir, subDir) => {
   }
   return '';
 }
-*/
 
-const thumbnailSharp = require('../thumbnail-sharp/index');
+const walkDir = (basedir, dir = '.', filelist = []) => {
+  let files = fs.readdirSync(path.join(basedir, dir));
+  files.forEach((file) => {
+    if (fs.statSync(path.join(basedir, dir, file)).isDirectory()) {
+      filelist = walkDir(basedir, path.join(dir, file), filelist);
+    } else {
+      filelist.push(path.join(dir, file));
+    }
+  });
+  return filelist;
+}
 
 const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
 
@@ -52,6 +63,28 @@ const getImageBuffer = (image_path, _cb) => {
 
 }
 
+const sanitizeRequiredArguments = (args, _cb) => {
+
+  var san_args = [];
+  for (let i = 0; i < args.length; i++) {
+    // Required arguments
+    if (!args[i]) {
+      return _cb(new Error('missing required argument'), undefined);
+    }
+    const san_arg = sanitize(args[i]);
+    if (!san_arg) {
+      return _cb(new Error('malformed argument'), undefined);
+    }
+    san_args.push(san_arg);
+  }
+
+  return _cb(undefined, san_args);
+}
+
+const sanitizeThumb = (thumb, _cb) => {
+  _cb(undefined, thumb);
+}
+
 class imageHandler {
   constructor(imagePath, thumbPath=false) {
     this.imagePath = imagePath;
@@ -60,96 +93,61 @@ class imageHandler {
 
   image(album, image, thumb, _cb) {
 
-    // Required arguments
-    if (!album || !image) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'missing required argument',
-        }
-      }, undefined, undefined);
-    }
-
-    const san_album = sanitize(album);
-    const san_image = sanitize(image);
-    if (!san_album || !san_image) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'malformed argument',
-        }
-      }, undefined, undefined);
-    }
-
-    const image_path = path.join(this.imagePath, san_album, san_image);
-
-    // If they want a thumbnail, generate, cache, and return it instead
-    if (thumb) {
-      const san_thumb = sanitize(thumb);
-      const thumb_path = path.join(this.thumbPath, san_album, san_thumb, san_image);
-      return getThumbBuffer(image_path, thumb_path, san_thumb, (err, thumb_buffer, thumb_content_type) => {
-        if (err) {
-          // return the original image if there is an error
-          return getImageBuffer(image_path, (err, image_buffer, image_content_type) => {
-            if (err) {
-              return _cb({
-                'error': {
-                  'code': 500,
-                  'message': 'Unable to get image',
-                }
-              }, undefined, undefined);
-            }
-            return _cb(undefined, image_buffer, image_content_type);
-          });
-        }
-        return _cb(undefined, thumb_buffer, thumb_content_type);
-      });
-    }
-
-    return getImageBuffer(image_path, (err, image_buffer, image_content_type) => {
-      if (err) {
+    sanitizeRequiredArguments([album], (err, args) => {
+      if (err || !args) {
         return _cb({
           'error': {
             'code': 500,
-            'message': 'Unable to get image',
+            'message': err.message,
           }
         }, undefined, undefined);
       }
-      return _cb(undefined, image_buffer, image_content_type);
+      const [album] = args;
+
+      const image_path = sanitizeToRoot(path.join(this.imagePath, album), image);
+
+      // If they want a thumbnail, generate, cache, and return it instead
+      if (thumb) {
+        const san_thumb = sanitize(thumb);
+        const thumb_path = sanitizeToRoot(path.join(this.thumbPath, album), path.join(thumb, image));
+        return getThumbBuffer(image_path, thumb_path, san_thumb, (err, thumb_buffer, thumb_content_type) => {
+          if (err) {
+            // return the original image if there is an error
+            return getImageBuffer(image_path, (err, image_buffer, image_content_type) => {
+              if (err) {
+                return _cb({
+                  'error': {
+                    'code': 500,
+                    'message': 'Unable to get backup image',
+                  }
+                }, undefined, undefined);
+              }
+              return _cb(undefined, image_buffer, image_content_type);
+            });
+          }
+          return _cb(undefined, thumb_buffer, thumb_content_type);
+        });
+      }
+
+      return getImageBuffer(image_path, (err, image_buffer, image_content_type) => {
+        if (err) {
+          return _cb({
+            'error': {
+              'code': 500,
+              'message': 'Unable to get image',
+            }
+          }, undefined, undefined);
+        }
+        return _cb(undefined, image_buffer, image_content_type);
+      });
     });
 
   }
 
   thumbnails(album, thumb, _cb) {
 
-    // Required arguments
-    if (!album || !thumb) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'missing required argument',
-        }
-      });
-    }
-
-    const san_album = sanitize(album);
-    const san_thumb = sanitize(thumb);
-    // make sure we have valid input
-    const [ width, height ] = san_thumb.split('x');
-    const san_width = parseInt(width);
-    const san_height = parseInt(height);
-    if (!san_album || !san_thumb || +width !== san_width || +height !== san_height) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'malformed argument',
-        }
-      });
-    }
- 
-    let album_path = path.join(this.imagePath, san_album);
-    fs.readdir(album_path, (err, files) => {
-      if (err) {
+    sanitizeRequiredArguments([album, thumb], (err, args) => {
+      if (err || !args) {
         return _cb({
           'error': {
             'code': 500,
@@ -157,6 +155,24 @@ class imageHandler {
           }
         });
       }
+      const [album, thumb] = args;
+
+      // make sure we have valid input
+      const [ width, height ] = thumb.split('x');
+      const san_width = parseInt(width);
+      const san_height = parseInt(height);
+      if (+width !== san_width || +height !== san_height) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': 'malformed argument',
+          }
+        });
+      }
+
+      let album_path = path.join(this.imagePath, album);
+      let files = walkDir(album_path);
+ 
       // No files to loop on
       if (!files.length) {
         return _cb({
@@ -173,7 +189,7 @@ class imageHandler {
         let file = files[i];
 
         let image_path = path.join(album_path, file);
-        let thumb_path = path.join(this.thumbPath, san_album, san_thumb, file);
+        let thumb_path = path.join(this.thumbPath, album, thumb, file);
         thumbnailSharp.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
           if (!err) {
             images[file] = {
@@ -206,29 +222,8 @@ class imageHandler {
 
   list(album, _cb) {
 
-    // Required arguments
-    if (!album) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'missing required argument',
-        }
-      });
-    }
-
-    let images = {};
-    const san_album = sanitize(album);
-    if (!san_album) {
-      return _cb({
-        'error': {
-          'code': 500,
-          'message': 'malformed argument',
-        }
-      });
-    }
-    let album_path = path.join(this.imagePath, san_album);
-    fs.readdir(album_path, (err, files) => {
-      if (err) {
+    sanitizeRequiredArguments([album], (err, args) => {
+      if (err || !args) {
         return _cb({
           'error': {
             'code': 500,
@@ -236,6 +231,11 @@ class imageHandler {
           }
         });
       }
+      const [album] = args;
+
+      let album_path = path.join(this.imagePath, album);
+      let files = walkDir(album_path);
+
       // No files to loop on
       if (!files.length) {
         return _cb({
@@ -246,6 +246,7 @@ class imageHandler {
         });
       }
 
+      let images = {};
       let done = 0;
       for (let i = 0; i < files.length; i++) {
         let file = files[i];
@@ -304,7 +305,6 @@ class imageHandler {
       }
 
       let dirs = {};
-      let done = 0;
       for (let i = 0; i < files.length; i++) {
         let file = files[i];
         if (fs.statSync(path.join(this.imagePath, file)).isDirectory()) {
