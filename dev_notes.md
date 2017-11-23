@@ -58,3 +58,9 @@ JWT:
 * https://scotch.io/tutorials/authenticate-a-node-js-api-with-json-web-tokens
 * https://gist.github.com/smebberson/1581536
 
+recursive readdir:
+* https://gist.github.com/kethinov/6658166
+
+node-json-db:
+* https://www.npmjs.com/package/node-json-db
+

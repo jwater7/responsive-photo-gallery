@@ -24,6 +24,7 @@ class jwtUserAuth {
         throw (new Error('version mismatch'))
       }
     } catch(e) {
+      //this.db.delete('/');
       // Initialize Database
       let password = process.env.DEFAULT_PASSWORD || crypto.randomBytes(3*4).toString('base64');
     // TODO need to hash to keep safe
