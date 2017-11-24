@@ -24,8 +24,10 @@ The backend may be customized using environment variables:
   Set express server port
 * DEFAULT_PASSWORD (default is a random base64 string)
   Sets the default API admin passwordA (written to config file)
+* DEFAULT_PRIVATE_KEY (default is a random base64 string)
+  Sets the JSON Web Token signing key (to be consistent over reboots)
 * PRIVATE_KEY (default is a random base64 string)
-  Sets the JSON Web Token signing key (can be consistent over reboots)
+  Overrides the JSON Web Token signing key with a new one
 * AUTH_PATH (default '/data/auth')
   Sets the path to the authentication data directory for persistance
 * IMAGE_PATH (default '/images')

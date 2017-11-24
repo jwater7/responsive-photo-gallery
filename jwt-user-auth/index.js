@@ -26,9 +26,9 @@ class jwtUserAuth {
     } catch(e) {
       //this.db.delete('/');
       // Initialize Database
-      let password = process.env.DEFAULT_PASSWORD || crypto.randomBytes(3*4).toString('base64');
-    // TODO need to hash to keep safe
       this.db.push('/dbVersion', '0');
+      // TODO need to hash to keep safe
+      let password = process.env.DEFAULT_PASSWORD || crypto.randomBytes(3*4).toString('base64');
       this.db.push('/users', {
         'admin': {
           password,
@@ -36,15 +36,20 @@ class jwtUserAuth {
           'admin': true,
         }
       });
+      let privateKey = process.env.DEFAULT_PRIVATE_KEY || crypto.randomBytes(3*4).toString('base64');
+      // TODO need to keep safe
+      this.db.push('/privateKey', this.privateKey);
     }
+
+    // If we passed in the private key then save it to use it
+    if (process.env.PRIVATE_KEY) {
+      this.db.push('/privateKey', this.privateKey);
+    }
+    this.privateKey = crypto.randomBytes(3*4).toString('base64');
+    try { this.privateKey = this.db.getData('/privateKey'); } catch(e) {}
 
     this.users = [];
     try { this.users = this.db.getData('/users'); } catch(e) {}
-
-    // Autogenerate each instance, but save in text for reference
-    this.privateKey = process.env.PRIVATE_KEY || crypto.randomBytes(3*4).toString('base64')
-    // TODO need to keep safe
-    try { this.db.push('/privateKey', this.privateKey); } catch(e) {}
 
     this.keyBlackList = {};
 
