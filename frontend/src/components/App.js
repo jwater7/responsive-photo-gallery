@@ -46,7 +46,7 @@ class App extends React.Component {
   }
 
   updateAuth = (token) => {
-    cookies.set('authtoken', token);
+    cookies.set('authtoken', token, {path: '/'});
     this.setState({authtoken: token});
     //if (!token) {
     //  cookies.remove('authtoken');
