@@ -2,7 +2,7 @@
 //
 
 // TODO pass in
-var base_prefix = '';
+var base_prefix = '/';
 if (process.env.PUBLIC_URL) {
   base_prefix = process.env.PUBLIC_URL;
   if (base_prefix.substr(-1) !== '/') {
