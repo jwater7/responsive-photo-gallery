@@ -9,6 +9,12 @@ npm install swagger-jsdoc --save
 npm install swagger-ui-express --save
 ~~~~
 
+Tag a new version (will change package.json and git tag)
+~~~~
+npm version 0.X.0
+git push origin HEAD --tags
+~~~~
+
 Run with (and add to package.json as debug script)
 ~~~~
 DEBUG=responsive-photo-gallery:* npm start
