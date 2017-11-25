@@ -3,6 +3,7 @@
 
 import React, { Component } from 'react';
 import { Link } from 'react-router-dom';
+import { Breadcrumb, PageHeader, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
 import ImageList from './ImageList';
@@ -73,18 +74,26 @@ class List extends Component {
     const collectionMap = this.getCollectionMapForAlbum(this.props.match.params.album);
     return (
       <div>
-        <h1>List for {this.props.match.params.album}:</h1>
-        {Object.keys(collectionMap).sort().map((collectionKey) => (
-          <Link key={collectionKey} to={{
-            pathname: `/collection/${this.props.match.params.album}`,
-            search: '?filter=' + collectionMap[collectionKey].filter,
-            /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
-          }}>
-            <h2>Collection for {collectionMap[collectionKey].description}:</h2>
-            <ImageList photos={this.photos(collectionMap[collectionKey].items)} />
-            {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
-          </Link>
-        ))}
+        <Breadcrumb>
+          <Breadcrumb.Item href="/albums">Albums</Breadcrumb.Item>
+          <Breadcrumb.Item active>Collections</Breadcrumb.Item>
+        </Breadcrumb>
+        <h3 style={{overflow: 'hidden',}}><small>{this.props.match.params.album}</small></h3>
+        <Row>
+          <Col xs={12}>
+            {Object.keys(collectionMap).sort().map((collectionKey) => (
+              <Link key={collectionKey} to={{
+                pathname: `/collection/${this.props.match.params.album}`,
+                search: '?filter=' + collectionMap[collectionKey].filter,
+                /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
+              }}>
+                <h5>{collectionMap[collectionKey].description}:</h5>
+                <ImageList photos={this.photos(collectionMap[collectionKey].items)} />
+                {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
+              </Link>
+            ))}
+          </Col>
+        </Row>
       </div>
     );
   }
