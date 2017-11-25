@@ -75,7 +75,7 @@ class List extends React.Component {
     return (
       <div>
         <Breadcrumb>
-          <Breadcrumb.Item><Link to="/albums">Albums</Link></Breadcrumb.Item>
+          <Breadcrumb.Item onClick={ e => this.props.history.push("/albums")}>Albums</Breadcrumb.Item>
           <Breadcrumb.Item active>Collections</Breadcrumb.Item>
         </Breadcrumb>
         <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}</h4>

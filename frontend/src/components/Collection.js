@@ -2,7 +2,7 @@
 //
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+//import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
@@ -120,12 +120,8 @@ class List extends React.Component {
     return (
       <div>
         <Breadcrumb>
-          <Breadcrumb.Item><Link to="/albums">Albums</Link></Breadcrumb.Item>
-          <Breadcrumb.Item>
-            <Link to={{
-              pathname: `/list/${this.props.match.params.album}`,
-            }}>Collections</Link>
-          </Breadcrumb.Item>
+          <Breadcrumb.Item onClick={ e => this.props.history.push("/albums")}>Albums</Breadcrumb.Item>
+          <Breadcrumb.Item onClick={ e => this.props.history.push("/list/" + this.props.match.params.album)}>Collections</Breadcrumb.Item>
           <Breadcrumb.Item active>Collection</Breadcrumb.Item>
         </Breadcrumb>
         <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}<br/><small>{description}</small></h4>
