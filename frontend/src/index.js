@@ -3,13 +3,14 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom';
-//import './index.css';
 import App from './components/App';
 import { Provider } from 'react-redux';
 import { createStore } from 'redux';
 import reducers from './reducers';
 // TODO determine when to use the service worker for caching
 //import registerServiceWorker from './registerServiceWorker';
+
+import './index.css';
 
 let store = createStore(reducers);
 
