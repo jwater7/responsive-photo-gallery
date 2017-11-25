@@ -55,7 +55,7 @@ class Login extends React.Component {
         <form onSubmit={this.login}>
           <FormGroup controlId="username">
             {/*<ControlLabel>Username:</ControlLabel>*/}
-            <FormControl type="text" value={this.state.username} onChange={this.handleUsernameChange} placeholder="Enter username"/>
+            <FormControl type="text" value={this.state.username} onChange={this.handleUsernameChange} placeholder="Enter username" autocorrect="off" autocapitalize="none"/>
           </FormGroup>
           <FormGroup controlId="password">
             {/*<ControlLabel>Password:</ControlLabel>*/}
