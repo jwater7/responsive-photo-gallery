@@ -1,7 +1,7 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
-import React, { Component } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
@@ -30,7 +30,7 @@ const passDateFilter = (filter, mtime) => {
   return true;
 }
 
-class List extends Component {
+class List extends React.Component {
 
   componentDidMount() {
 

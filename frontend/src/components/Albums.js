@@ -1,12 +1,12 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
-import React, { Component } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import AlbumElementContainer from './AlbumElementContainer';
 
-class Albums extends Component {
+class Albums extends React.Component {
 
   componentDidMount() {
 

@@ -3,8 +3,22 @@
 
 import React from 'react';
 
-const Skeleton = () => (
-  <div />
+/* XXX Remove for simple component or delete below
+class Skeleton extends React.Component {
+
+  render() {
+    return (
+      <div>
+      </div>
+    );
+  }
+
+}
+*/
+
+const Skeleton = (props) => (
+  <div>
+  </div>
 );
 
 export default Skeleton;

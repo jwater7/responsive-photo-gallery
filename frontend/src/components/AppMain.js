@@ -1,10 +1,14 @@
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
+
 import React from 'react';
-import { Switch, Route } from 'react-router-dom';
+import { Switch } from 'react-router-dom';
 import { Grid } from 'react-bootstrap';
 
 import NotFound from './NotFound';
+import PropsRoute from './PropsRoute';
 import AuthenticatedRoute from './AuthenticatedRoute';
-import PublicRoute from './PublicRoute';
+import PublicOnlyRoute from './PublicOnlyRoute';
 import Login from './Login';
 import Logout from './Logout';
 import Landing from './Landing';
@@ -15,13 +19,13 @@ import CollectionContainer from './CollectionContainer';
 const AppMain = (props) => (
   <Grid>
     <Switch>
-      <Route exact name="landing" path="/" component={Landing} />
+      <PropsRoute exact name="landing" path="/" component={Landing} {...props} />
       <AuthenticatedRoute path="/list/:album" component={ListContainer} {...props} />
       <AuthenticatedRoute path="/collection/:album" component={CollectionContainer} {...props} />
       <AuthenticatedRoute exact path="/albums" component={AlbumsContainer} {...props} />
-      <PublicRoute path="/login" component={Login} {...props} />
+      <PublicOnlyRoute path="/login" component={Login} {...props} />
       <AuthenticatedRoute path="/logout" component={Logout} {...props} />
-      <Route component={NotFound} />
+      <PropsRoute component={NotFound} {...props} />
     </Switch>
   </Grid>
 );

@@ -1,8 +1,17 @@
-import React from 'react';
+// vim: tabstop=2 shiftwidth=2 expandtab
+//
 
-const Start = () => (
+import React from 'react';
+import LandingAuthenticated from './LandingAuthenticated';
+import LandingPublic from './LandingPublic';
+
+const Start = (props) => (
   <div>
-    Welcome, please login to view the gallery
+    {props.authtoken ? (
+      <LandingAuthenticated {...props}/>
+    ) : (
+      <LandingPublic {...props} />
+    )}
   </div>
 );
 

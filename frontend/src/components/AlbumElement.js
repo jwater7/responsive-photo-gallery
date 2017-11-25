@@ -1,11 +1,11 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
-import React, { Component } from 'react';
+import React from 'react';
 //import Gallery from 'react-photo-gallery';
 import ImageList from './ImageList';
 
-class AlbumElement extends Component {
+class AlbumElement extends React.Component {
 
   thumbDim = '40x40';
 
