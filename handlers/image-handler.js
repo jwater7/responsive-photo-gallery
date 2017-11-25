@@ -21,10 +21,15 @@ const sanitizeToRoot = (rootDir, subDir) => {
 const walkDir = (basedir, dir = '.', filelist = []) => {
   let files = fs.readdirSync(path.join(basedir, dir));
   files.forEach((file) => {
-    if (fs.statSync(path.join(basedir, dir, file)).isDirectory()) {
-      filelist = walkDir(basedir, path.join(dir, file), filelist);
-    } else {
-      filelist.push(path.join(dir, file));
+    try {
+      let stat = fs.statSync(path.join(basedir, dir, file));
+      if (stat.isDirectory()) {
+        filelist = walkDir(basedir, path.join(dir, file), filelist);
+      } else {
+        filelist.push(path.join(dir, file));
+      }
+    } catch(e) {
+      //ignore failed stat, not a directory or file, probably failed symlink
     }
   });
   return filelist;
