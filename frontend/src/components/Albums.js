@@ -3,6 +3,7 @@
 
 import React, { Component } from 'react';
 import { Link } from 'react-router-dom';
+import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import AlbumElementContainer from './AlbumElementContainer';
 
 class Albums extends Component {
@@ -18,13 +19,19 @@ class Albums extends Component {
   render() {
     return (
       <div>
-        <h1>Albums:</h1>
-        {Object.keys(this.props.albums).map((album) => (
-          <Link key={album} to={`/list/${album}`}>
-            <h2>{this.props.albums[album].description}</h2>
-            <AlbumElementContainer album={album} {...this.props} />
-          </Link>
-        ))}
+        <Breadcrumb>
+          <Breadcrumb.Item active>Albums</Breadcrumb.Item>
+        </Breadcrumb>
+        <Row>
+          <Col xs={12}>
+            {Object.keys(this.props.albums).map((album) => (
+              <Link key={album} to={`/list/${album}`}>
+                <h5 style={{overflow: 'hidden',}}>{this.props.albums[album].description}</h5>
+                <AlbumElementContainer album={album} {...this.props} />
+              </Link>
+            ))}
+          </Col>
+        </Row>
       </div>
     );
   }

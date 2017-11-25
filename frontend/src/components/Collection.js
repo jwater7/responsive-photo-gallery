@@ -2,6 +2,8 @@
 //
 
 import React, { Component } from 'react';
+import { Link } from 'react-router-dom';
+import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
 import ImageList from './ImageList';
@@ -38,20 +40,40 @@ class List extends Component {
 
   }
 
-  photos = () => {
-    if (!this.props.match.params.album) {
-      return [];
-    }
+  getURLParams = () => {
     // find the filter
     if (!this.props.location.search) {
-      return [];
+      return undefined;
     }
     const params = new URLSearchParams(this.props.location.search);
     const json_filter = params.get('filter');
     if (!json_filter) {
-      return [];
+      return undefined;
     }
     const filter = JSON.parse(json_filter);
+
+    const json_description = params.get('description');
+    if (!json_description) {
+      return undefined;
+    }
+
+    const description = JSON.parse(json_description);
+
+    return {
+      filter,
+      description,
+    };
+  }
+
+  photos = () => {
+    if (!this.props.match.params.album) {
+      return [];
+    }
+
+    let {filter} = this.getURLParams();
+    if (!filter) {
+      return [];
+    }
 
     const alb = this.props.match.params.album;
     if (!(alb in this.props.list)) {
@@ -94,11 +116,25 @@ class List extends Component {
   }
 
   render() {
+    let {description} = this.getURLParams();
     return (
       <div>
-        <h1>Collection for {this.props.match.params.album}:</h1>
-        {/*<Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />*/}
-        <ImageList photos={this.photos()} onClick={this.handleOnClick} />
+        <Breadcrumb>
+          <Breadcrumb.Item><Link to="/albums">Albums</Link></Breadcrumb.Item>
+          <Breadcrumb.Item>
+            <Link to={{
+              pathname: `/list/${this.props.match.params.album}`,
+            }}>Collections</Link>
+          </Breadcrumb.Item>
+          <Breadcrumb.Item active>Collection</Breadcrumb.Item>
+        </Breadcrumb>
+        <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}<br/><small>{description}</small></h4>
+        <Row>
+          <Col xs={12}>
+            {/*<Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />*/}
+            <ImageList photos={this.photos()} onClick={this.handleOnClick} />
+          </Col>
+        </Row>
       </div>
     );
   }

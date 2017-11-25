@@ -3,7 +3,7 @@
 
 import React, { Component } from 'react';
 import { Link } from 'react-router-dom';
-import { Breadcrumb, PageHeader, Row, Col } from 'react-bootstrap';
+import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
 import ImageList from './ImageList';
@@ -75,19 +75,19 @@ class List extends Component {
     return (
       <div>
         <Breadcrumb>
-          <Breadcrumb.Item href="/albums">Albums</Breadcrumb.Item>
+          <Breadcrumb.Item><Link to="/albums">Albums</Link></Breadcrumb.Item>
           <Breadcrumb.Item active>Collections</Breadcrumb.Item>
         </Breadcrumb>
-        <h3 style={{overflow: 'hidden',}}><small>{this.props.match.params.album}</small></h3>
+        <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}</h4>
         <Row>
           <Col xs={12}>
             {Object.keys(collectionMap).sort().map((collectionKey) => (
               <Link key={collectionKey} to={{
                 pathname: `/collection/${this.props.match.params.album}`,
-                search: '?filter=' + collectionMap[collectionKey].filter,
+                search: '?filter=' + collectionMap[collectionKey].filter + '&description=' + JSON.stringify(collectionMap[collectionKey].description),
                 /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
               }}>
-                <h5>{collectionMap[collectionKey].description}:</h5>
+                <h5 style={{overflow: 'hidden',}}>{collectionMap[collectionKey].description}</h5>
                 <ImageList photos={this.photos(collectionMap[collectionKey].items)} />
                 {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
               </Link>
