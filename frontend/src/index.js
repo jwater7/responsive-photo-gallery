@@ -11,6 +11,7 @@ import reducers from './reducers';
 //import registerServiceWorker from './registerServiceWorker';
 
 import './index.css';
+import 'react-photoswipe/lib/photoswipe.css';
 
 let store = createStore(reducers);
 

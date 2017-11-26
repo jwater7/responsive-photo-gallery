@@ -6,7 +6,8 @@ import React from 'react';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
-import ImageList from './ImageList';
+//import ImageList from './ImageList';
+import { PhotoSwipeGallery } from 'react-photoswipe';
 
 const passDateFilter = (filter, mtime) => {
   if (filter.year) {
@@ -80,7 +81,7 @@ class List extends React.Component {
       return [];
     }
     let imagelist = [];
-    let filelist = Object.keys(this.props.list[alb]);
+    let filelist = Object.keys(this.props.list[alb]).sort();
     for (let i = 0; i < filelist.length; i++) {
       let filename = filelist[i];
 
@@ -98,7 +99,9 @@ class List extends React.Component {
       if(!imageurl) {
         continue;
       }
-      let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
+      let imageobj = {key: filename, src: imageurl, w: this.props.list[alb][filename].orientedWidth, h: this.props.list[alb][filename].orientedHeight};
+      console.log(imageobj);
+      //let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
       //let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].width, height: this.props.list[alb][filename].height};
       imagelist.push(imageobj);
     }
@@ -128,7 +131,8 @@ class List extends React.Component {
         <Row>
           <Col xs={12}>
             {/*<Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />*/}
-            <ImageList photos={this.photos()} onClick={this.handleOnClick} />
+            {/*<ImageList photos={this.photos()} onClick={this.handleOnClick} />*/}
+            <PhotoSwipeGallery items={this.photos()} onClick={this.handleOnClick} options={{shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} />
           </Col>
         </Row>
       </div>
