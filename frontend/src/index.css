@@ -5,6 +5,19 @@ body {
   font-family: sans-serif;
 }
 */
+/* React-Photoswipe */
+.pswp-thumbnail {
+  display: inline-block;
+  /*width: 100px;*/
+  /*height: 100px;*/
+  margin: 1px 1px 1px 1px;
+  cursor: pointer;
+  /*
+  img {
+    max-width: '100%';
+  }
+  */
+}
 
 /* Fix auto zoom for IOS */
 input[type='email'],
