@@ -5,9 +5,9 @@ import React from 'react';
 //import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
-//import Gallery from 'react-photo-gallery';
+import Gallery from 'react-photo-gallery';
 //import ImageList from './ImageList';
-import { PhotoSwipeGallery } from 'react-photoswipe';
+//import { PhotoSwipeGallery } from 'react-photoswipe';
 
 const passDateFilter = (filter, mtime) => {
   if (filter.year) {
@@ -99,9 +99,9 @@ class List extends React.Component {
       if(!imageurl) {
         continue;
       }
-      let imageobj = {key: filename, src: imageurl, w: this.props.list[alb][filename].orientedWidth, h: this.props.list[alb][filename].orientedHeight};
-      console.log(imageobj);
+      //let imageobj = {key: filename, src: imageurl, w: this.props.list[alb][filename].orientedWidth, h: this.props.list[alb][filename].orientedHeight};
       //let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
+      let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].orientedWidth, height: this.props.list[alb][filename].orientedHeight};
       //let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].width, height: this.props.list[alb][filename].height};
       imagelist.push(imageobj);
     }
@@ -130,9 +130,9 @@ class List extends React.Component {
         <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}<br/><small>{description}</small></h4>
         <Row>
           <Col xs={12}>
-            {/*<Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />*/}
+            <Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />
             {/*<ImageList photos={this.photos()} onClick={this.handleOnClick} />*/}
-            <PhotoSwipeGallery items={this.photos()} onClick={this.handleOnClick} options={{shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} />
+            {/*<PhotoSwipeGallery items={this.photos()} onClick={this.handleOnClick} options={{shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} />*/}
           </Col>
         </Row>
       </div>

@@ -6,7 +6,14 @@ import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
-import ImageList from './ImageList';
+//import ImageList from './ImageList';
+import { PhotoSwipeGallery } from 'react-photoswipe';
+
+const getThumbnailContent = (item) => {
+  return (
+    <img alt={item.key} src={item.thumbnail} width={item.thumbnailWidth} height={item.thumbnailHeight} />
+  );
+}
 
 class List extends React.Component {
 
@@ -40,8 +47,10 @@ class List extends React.Component {
       return [];
     }
     let imagelist = [];
-    for (let i = 0; i < collectionItems.length; i++) {
-      let filename = collectionItems[i];
+    // TODO sort by modify date instead of filename;
+    let sortedCollectionItems = collectionItems.sort();
+    for (let i = 0; i < sortedCollectionItems.length; i++) {
+      let filename = sortedCollectionItems[i];
       let imageurl = API.imageurl({
         token: this.props.authtoken,
         album: alb,
@@ -54,7 +63,17 @@ class List extends React.Component {
         continue;
       }
       let thumburl = this.props.thumbs[alb][this.thumbDim][filename].base64tag;
-      let imageobj = {key: filename, src: thumburl, width, height, orig: imageurl};
+      //let imageobj = {key: filename, src: thumburl, width, height, orig: imageurl};
+      let imageobj = {
+        key: filename,
+        title: filename,
+        src: imageurl,
+        w: this.props.list[alb][filename].orientedWidth,
+        h: this.props.list[alb][filename].orientedHeight,
+        thumbnail: thumburl,
+        thumbnailWidth: width,
+        thumbnailHeight: height,
+      };
       imagelist.push(imageobj);
     }
     if (!imagelist) {
@@ -82,15 +101,18 @@ class List extends React.Component {
         <Row>
           <Col xs={12}>
             {Object.keys(collectionMap).sort().map((collectionKey) => (
-              <Link key={collectionKey} to={{
-                pathname: `/collection/${this.props.match.params.album}`,
-                search: '?filter=' + collectionMap[collectionKey].filter + '&description=' + JSON.stringify(collectionMap[collectionKey].description),
-                /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
-              }}>
-                <h5 style={{overflow: 'hidden',}}>{collectionMap[collectionKey].description}</h5>
-                <ImageList photos={this.photos(collectionMap[collectionKey].items)} />
-                {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
-              </Link>
+              <div key={collectionKey}>
+                <Link key={collectionKey} to={{
+                  pathname: `/collection/${this.props.match.params.album}`,
+                  search: '?filter=' + collectionMap[collectionKey].filter + '&description=' + JSON.stringify(collectionMap[collectionKey].description),
+                  /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
+                }}>
+                  <h5 style={{overflow: 'hidden',}}>{collectionMap[collectionKey].description}</h5>
+                  {/*<ImageList photos={this.photos(collectionMap[collectionKey].items)} />*/}
+                  {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
+                </Link>
+                <PhotoSwipeGallery items={this.photos(collectionMap[collectionKey].items)} options={{shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} thumbnailContent={getThumbnailContent} />
+              </div>
             ))}
           </Col>
         </Row>
