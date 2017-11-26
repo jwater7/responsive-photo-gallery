@@ -12,6 +12,11 @@ sharp.cache(false);
 
 const exifReader = require('exif-reader');
 
+// For corrections with auto rotations (1 (0deg) and 3 (180deg) are orig WxH)
+// 6 needs to be rotated 90 deg, 8 needs to be rotated 270 deg
+// 2 and 4 are mirrors of 1 and 3, 5 and 7 are mirrors of 6 and 8
+const needsSwitched = [5, 6, 7, 8];
+
 function cacheThumb(src, dest, width, height, cb) {
 
   // check source file
@@ -101,16 +106,28 @@ function getImageMetadata(src, cb) {
         if(err) {
           return cb(err, undefined);
         }
-        // TODO populate
+        imageMetadata['width'] = metadata.width;
+        imageMetadata['height'] = metadata.height;
+        imageMetadata['format'] = metadata.format;
+        imageMetadata['orientation'] = metadata.orientation;
+        imageMetadata['orientedWidth'] = metadata.width;
+        imageMetadata['orientedHeight'] = metadata.height;
+        if (needsSwitched.indexOf(metadata.orientation) > -1) {
+          imageMetadata['orientedWidth'] = metadata.height;
+          imageMetadata['orientedHeight'] = metadata.width;
+        }
         // populate from exif
         if (metadata.exif) {
           const exifData = exifReader(metadata.exif);
           if (exifData) {
+            if(exifData.image.Orientation) {
+              imageMetadata['exifOrientation'] = exifData.image.Orientation;
+            }
             if(exifData.image.ModifyDate) {
               imageMetadata['modifyDate'] = exifData.image.ModifyDate;
             }
             if(exifData.gps) {
-              imageMetadata['gps'] = exifData.gps;
+              imageMetadata['exifGPS'] = exifData.gps;
             }
           }
         }

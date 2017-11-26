@@ -70,3 +70,9 @@ recursive readdir:
 node-json-db:
 * https://www.npmjs.com/package/node-json-db
 
+exif orientation:
+* https://www.daveperrett.com/articles/2012/07/28/exif-orientation-handling-is-a-ghetto/
+
+photoswipe:
+* https://github.com/minhtranite/react-photoswipe
+
