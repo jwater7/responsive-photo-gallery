@@ -21,7 +21,7 @@ class List extends React.Component {
 
   componentDidMount() {
 
-    if (!(this.props.match.params.album in this.props.list)) {
+    if (!(this.props.match.params.album in this.props.list) || !(this.props.match.params.album in this.props.collectionMap)) {
       this.props.loadList(this.props.match.params.album, this.props.authtoken);
     }
 
