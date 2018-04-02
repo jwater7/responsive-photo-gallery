@@ -201,6 +201,15 @@ class imageHandler {
               // TODO: these are not necessarily png files
               base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
             };
+          } else {
+            // error in processing
+
+            // if its a movie, use a standard thumb
+            if (path.extname(file).toLowerCase() == '.mov') {
+              images[file] = {
+                base64tag: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAAZiS0dEAAAAAAAA+UO7fwAAAAlwSFlzAAAASAAAAEgARslrPgAAAL9JREFUaN7t2M0NglAQReGjdcjaNmhXQwMuDA0pCVgALnQhyvshiJfE+yVvNyRzMjvAzMzsUwFUQAf0z1cGZuuXmSXm3l/W8teRD+vAfLnw3OSAKvLxGq6Q1EU+XsMVkvrEU19hdoD6CrMD1Ff4SoDyCgObQMCaDXbeqreZywFqDlBzgJoD1Byg5gA1B6g5QM0BamMBN/VSEW1OwFm9ZcQpZ2gPNOT9XvnluwC73NICOPI4mXrxFjhMWd7MzP7HHbf/+Yj2UMh7AAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDE4LTA0LTAyVDA4OjExOjU0KzAwOjAwZRIcqgAAACV0RVh0ZGF0ZTptb2RpZnkAMjAxOC0wNC0wMlQwODoxMTo1NCswMDowMBRPpBYAAAAodEVYdHN2ZzpiYXNlLXVyaQBmaWxlOi8vL3RtcC9tYWdpY2stVTgycHJVR2/WC3Y2AAAAAElFTkSuQmCC",
+              };
+            }
           }
 
           // Increment processing counter
