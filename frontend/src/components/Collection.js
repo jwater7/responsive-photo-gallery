@@ -31,7 +31,7 @@ const passDateFilter = (filter, mtime) => {
   return true;
 }
 
-class List extends React.Component {
+class Collection extends React.Component {
 
   componentDidMount() {
 
@@ -140,5 +140,5 @@ class List extends React.Component {
   }
 }
 
-export default List;
+export default Collection;
 
