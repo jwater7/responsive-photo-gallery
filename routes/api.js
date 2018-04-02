@@ -266,10 +266,10 @@ router.get('/image', auth.required, function(req, res, next) {
  *           required: true
  *       - name: thumb
  *         in: query
- *         description: an optional thumb dimension (e.g. "50x50")
+ *         description: A thumb dimension (e.g. "50x50")
  *         schema:
  *           type: string
- *           required: false
+ *           required: true
  *     responses:
  *       200:
  *         description: Returns JSON list
