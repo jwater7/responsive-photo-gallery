@@ -266,7 +266,7 @@ class imageHandler {
         let file = files[i];
         let image_path = path.join(album_path, file);
 
-        thumbnailSharp.getImageMetadata(image_path, (err, image_metadata) => {
+        thumbnailSharp.getMetadata(image_path, (err, image_metadata) => {
           if(!err) {
             // TODO description
             image_metadata['description'] = file;

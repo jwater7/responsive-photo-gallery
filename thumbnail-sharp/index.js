@@ -87,18 +87,20 @@ function cacheThumbAndGetBuffer(src, dest, width, height, cb) {
 
 }
 
-function getImageMetadata(src, cb) {
-  var imageMetadata = {};
+function getMetadata(src, cb) {
+  var returnMetadata = {};
   // get file size
+
+  returnMetadata['format'] = 'image';
 
   fs.stat(src, (err, stats) => {
     // Best guess mtime
     if (err) {
       // Default to now
       let date = new Date();
-      imageMetadata['modifyDate'] = date.toISOString();
+      returnMetadata['modifyDate'] = date.toISOString();
     } else {
-      imageMetadata['modifyDate'] = stats.mtime;
+      returnMetadata['modifyDate'] = stats.mtime;
     }
 
     sharp(src)
@@ -106,32 +108,32 @@ function getImageMetadata(src, cb) {
         if(err) {
           return cb(err, undefined);
         }
-        imageMetadata['width'] = metadata.width;
-        imageMetadata['height'] = metadata.height;
-        imageMetadata['format'] = metadata.format;
-        imageMetadata['orientation'] = metadata.orientation;
-        imageMetadata['orientedWidth'] = metadata.width;
-        imageMetadata['orientedHeight'] = metadata.height;
+        returnMetadata['width'] = metadata.width;
+        returnMetadata['height'] = metadata.height;
+        returnMetadata['formatType'] = metadata.format;
+        returnMetadata['orientation'] = metadata.orientation;
+        returnMetadata['orientedWidth'] = metadata.width;
+        returnMetadata['orientedHeight'] = metadata.height;
         if (needsSwitched.indexOf(metadata.orientation) > -1) {
-          imageMetadata['orientedWidth'] = metadata.height;
-          imageMetadata['orientedHeight'] = metadata.width;
+          returnMetadata['orientedWidth'] = metadata.height;
+          returnMetadata['orientedHeight'] = metadata.width;
         }
         // populate from exif
         if (metadata.exif) {
           const exifData = exifReader(metadata.exif);
           if (exifData) {
             if(exifData.image.Orientation) {
-              imageMetadata['exifOrientation'] = exifData.image.Orientation;
+              returnMetadata['exifOrientation'] = exifData.image.Orientation;
             }
             if(exifData.image.ModifyDate) {
-              imageMetadata['modifyDate'] = exifData.image.ModifyDate;
+              returnMetadata['modifyDate'] = exifData.image.ModifyDate;
             }
             if(exifData.gps) {
-              imageMetadata['exifGPS'] = exifData.gps;
+              returnMetadata['exifGPS'] = exifData.gps;
             }
           }
         }
-        return cb(undefined, imageMetadata);
+        return cb(undefined, returnMetadata);
       });
   });
 
@@ -165,7 +167,7 @@ function getNormalizedImageBuffer(src, cb) {
 module.exports = {
   cacheThumbAndGetBuffer,
   cacheThumb,
-  getImageMetadata,
+  getMetadata,
   getNormalizedImageBuffer,
 };
 
