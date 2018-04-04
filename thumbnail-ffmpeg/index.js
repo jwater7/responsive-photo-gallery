@@ -8,6 +8,9 @@ var ffmpeg = require('fluent-ffmpeg');
 
 function cacheThumb(src, dest, width, height, cb) {
 
+  // TODO need to check exists
+  // TODO create target directory if it does not exist yet
+
   ffmpeg(src)
     .on('end', function() {
       // TODO return errors?
@@ -16,7 +19,7 @@ function cacheThumb(src, dest, width, height, cb) {
     .screenshots({
       count: 1,
       folder: path.dirname(dest),
-      filename: path.basename(dest),
+      filename: path.basename(dest) + '.PNG',
       size: width + 'x' + height,
     });
 
