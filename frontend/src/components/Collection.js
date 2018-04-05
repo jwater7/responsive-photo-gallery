@@ -46,13 +46,23 @@ class Collection extends React.Component {
     if (!this.props.location.search) {
       return undefined;
     }
+    /*
+    var params = this.props.location.search.substr(1).split('&').reduce(function (q, query) {
+      var chunks = query.split('=');
+      var key = chunks[0];
+      var value = chunks[1];
+      return (q[key] = value, q);
+    }, {});
+    */
     const params = new URLSearchParams(this.props.location.search);
+    //const json_filter = params['filter'];
     const json_filter = params.get('filter');
     if (!json_filter) {
       return undefined;
     }
     const filter = JSON.parse(json_filter);
 
+    //const json_description = params['description'];
     const json_description = params.get('description');
     if (!json_description) {
       return undefined;
@@ -98,6 +108,11 @@ class Collection extends React.Component {
       })
       if(!imageurl) {
         continue;
+      }
+      // if it is a video then we want a thumbnail image url instead
+      if(this.props.list[alb][filename].format === 'video') {
+        // TODO
+        imageurl = '';
       }
       //let imageobj = {key: filename, src: imageurl, w: this.props.list[alb][filename].orientedWidth, h: this.props.list[alb][filename].orientedHeight};
       //let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
