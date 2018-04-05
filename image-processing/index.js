@@ -12,12 +12,24 @@ sharp.cache(false);
 
 const exifReader = require('exif-reader');
 
+const ffmpeg = require('fluent-ffmpeg');
+
 // For corrections with auto rotations (1 (0deg) and 3 (180deg) are orig WxH)
 // 6 needs to be rotated 90 deg, 8 needs to be rotated 270 deg
 // 2 and 4 are mirrors of 1 and 3, 5 and 7 are mirrors of 6 and 8
 const needsSwitched = [5, 6, 7, 8];
 
 function cacheThumb(src, dest, width, height, cb) {
+
+  if(path.extname(src).toLowerCase() == '.mov') {
+    return cacheVideoThumb(src, dest, width, height, cb);
+  }
+
+  return cacheImageThumb(src, dest, width, height, cb);
+
+}
+
+function cacheImageThumb(src, dest, width, height, cb) {
 
   // check source file
   fs.stat(src, (err, stats) => {
@@ -49,7 +61,7 @@ function cacheThumb(src, dest, width, height, cb) {
               if (err) {
                 return cb(err, undefined, undefined);
               }
-              const contentType = 'image/' + info.format;
+              const contentType = 'image/' + imageInfo.format;
               return cb(undefined, imageBuffer, contentType);
             });
         });
@@ -57,11 +69,60 @@ function cacheThumb(src, dest, width, height, cb) {
   });
 }
 
+function cacheVideoThumb(src, dest, width, height, cb) {
+
+  // check source file
+  fs.stat(src, (err, stats) => {
+    if (err) {
+      return cb(err, undefined, undefined);
+    }
+    if (!stats.isFile()) {
+      return cb(new Error('Source file does not exist'), undefined, undefined);
+    }
+
+    // try making the directory if not already there
+    mkdirp(path.dirname(dest), (err) => {
+      if (err) {
+        return cb(err, undefined, undefined);
+      }
+
+      const ffmpegImage = ffmpeg(src);
+      return ffmpegImage
+        .on('end', function(err, stdout, stderr) {
+          const sharpImageForBuf = sharp(dest);
+          return sharpImageForBuf
+            .toBuffer((err, imageBuffer, imageInfo) => {
+              if (err) {
+                return cb(err, undefined, undefined);
+              }
+              const contentType = 'image/' + imageInfo.format;
+              return cb(undefined, imageBuffer, contentType);
+            });
+        })
+        .on('error', function(err, stdout, stderr) {
+          return cb(err, undefined, undefined);
+        })
+        .screenshots({
+          count: 1,
+          folder: path.dirname(dest),
+          filename: path.basename(dest),
+          size: width + 'x' + height,
+        });
+    });
+  });
+}
+
 function cacheThumbAndGetBuffer(src, dest, width, height, cb) {
 
+  // Translate dest to have image extension with thumbs for videos
+  var tran_dest = dest;
+  if(path.extname(src).toLowerCase() == '.mov') {
+    tran_dest = dest + '.PNG';
+  }
+
   // check already converted
-  if (fs.existsSync(dest)) {
-    return fs.readFile(dest, (err, data) => {
+  if (fs.existsSync(tran_dest)) {
+    return fs.readFile(tran_dest, (err, data) => {
       if (err) {
         return cb(err, undefined, undefined);
       }
@@ -78,7 +139,7 @@ function cacheThumbAndGetBuffer(src, dest, width, height, cb) {
     });
   }
 
-  return cacheThumb(src, dest, width, height, (err, imageBuffer, contentType) => {
+  return cacheThumb(src, tran_dest, width, height, (err, imageBuffer, contentType) => {
     if (err) {
       return cb(err, undefined, undefined);
     }
@@ -88,6 +149,16 @@ function cacheThumbAndGetBuffer(src, dest, width, height, cb) {
 }
 
 function getMetadata(src, cb) {
+
+  if(path.extname(src).toLowerCase() == '.mov') {
+    return getVideoMetadata(src, cb);
+  }
+
+  return getImageMetadata(src, cb);
+
+}
+
+function getImageMetadata(src, cb) {
   var returnMetadata = {};
   // get file size
 
@@ -97,8 +168,7 @@ function getMetadata(src, cb) {
     // Best guess mtime
     if (err) {
       // Default to now
-      let date = new Date();
-      returnMetadata['modifyDate'] = date.toISOString();
+      returnMetadata['modifyDate'] = new Date();
     } else {
       returnMetadata['modifyDate'] = stats.mtime;
     }
@@ -139,6 +209,46 @@ function getMetadata(src, cb) {
 
 }
 
+function getVideoMetadata(src, cb) {
+  var returnMetadata = {};
+  // get file size
+
+  returnMetadata['format'] = 'video';
+
+  fs.stat(src, (err, stats) => {
+    // Best guess mtime
+    if (err) {
+      // Default to now
+      returnMetadata['modifyDate'] = new Date();
+    } else {
+      returnMetadata['modifyDate'] = stats.mtime;
+    }
+
+    ffmpeg.ffprobe(src, function(err, metadata) {
+      if(err) {
+        return cb(err, undefined);
+      }
+
+      returnMetadata['formatType'] = metadata.format.format_name; //'mov,mp4,m4a,3gp,3g2,mj2'
+      returnMetadata['modifyDate'] = new Date(metadata.format.tags.creation_time); //'2018-03-26 18:07:46'
+
+      //for metadata.streams[]
+      //returnMetadata['width'] = metadata.streams[i].width; //1920
+      //returnMetadata['height'] = metadata.streams[i].height; //1080
+      //returnMetadata[''] = metadata.streams[i].codec_name; //'h264'
+      //returnMetadata[''] = metadata.streams[i].codec_type; //'video'
+
+      //returnMetadata['orientation']
+      //returnMetadata['orientedWidth']
+      //returnMetadata['orientedHeight']
+      //returnMetadata['exifOrientation']
+      //returnMetadata['exifGPS']
+      return cb(undefined, returnMetadata);
+    });
+  });
+
+}
+
 function getNormalizedImageBuffer(src, cb) {
 
   fs.stat(src, (err, stats) => {
@@ -166,7 +276,6 @@ function getNormalizedImageBuffer(src, cb) {
 
 module.exports = {
   cacheThumbAndGetBuffer,
-  cacheThumb,
   getMetadata,
   getNormalizedImageBuffer,
 };

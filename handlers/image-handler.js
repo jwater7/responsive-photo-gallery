@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
-const thumbnailSharp = require('../thumbnail-sharp/index');
+const imageProcessing = require('../image-processing/index');
 
 // Alternative to sanitize for paths
 const sanitizeToRoot = (rootDir, subDir) => {
@@ -46,7 +46,7 @@ const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
     return _cb(new Error('Invalid Dimensions'), undefined, undefined);
   }
 
-  return thumbnailSharp.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, thumb_buffer, thumb_content_type) => {
+  return imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, thumb_buffer, thumb_content_type) => {
     if (err) {
       return _cb(err, undefined, undefined);
     }
@@ -58,7 +58,7 @@ const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
 
 const getImageBuffer = (image_path, _cb) => {
 
-  return thumbnailSharp.getNormalizedImageBuffer(image_path, (err, image_buffer, image_content_type) => {
+  return imageProcessing.getNormalizedImageBuffer(image_path, (err, image_buffer, image_content_type) => {
     if (err) {
       return _cb(err, undefined, undefined);
     }
@@ -195,7 +195,7 @@ class imageHandler {
 
         let image_path = path.join(album_path, file);
         let thumb_path = path.join(this.thumbPath, album, thumb, file);
-        thumbnailSharp.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
+        imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
           if (!err) {
             images[file] = {
               // TODO: these are not necessarily png files
@@ -266,7 +266,7 @@ class imageHandler {
         let file = files[i];
         let image_path = path.join(album_path, file);
 
-        thumbnailSharp.getMetadata(image_path, (err, image_metadata) => {
+        imageProcessing.getMetadata(image_path, (err, image_metadata) => {
           if(!err) {
             // TODO description
             image_metadata['description'] = file;
