@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
-const thumbnailSharp = require('../thumbnail-sharp/index');
+const imageProcessing = require('../image-processing/index');
 
 // Alternative to sanitize for paths
 const sanitizeToRoot = (rootDir, subDir) => {
@@ -46,7 +46,7 @@ const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
     return _cb(new Error('Invalid Dimensions'), undefined, undefined);
   }
 
-  return thumbnailSharp.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, thumb_buffer, thumb_content_type) => {
+  return imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, thumb_buffer, thumb_content_type) => {
     if (err) {
       return _cb(err, undefined, undefined);
     }
@@ -58,7 +58,7 @@ const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
 
 const getImageBuffer = (image_path, _cb) => {
 
-  return thumbnailSharp.getNormalizedImageBuffer(image_path, (err, image_buffer, image_content_type) => {
+  return imageProcessing.getNormalizedImageBuffer(image_path, (err, image_buffer, image_content_type) => {
     if (err) {
       return _cb(err, undefined, undefined);
     }
@@ -86,10 +86,6 @@ const sanitizeRequiredArguments = (args, _cb) => {
   return _cb(undefined, san_args);
 }
 
-const sanitizeThumb = (thumb, _cb) => {
-  _cb(undefined, thumb);
-}
-
 class imageHandler {
   constructor(imagePath, thumbPath=false) {
     this.imagePath = imagePath;
@@ -109,12 +105,16 @@ class imageHandler {
       }
       const [album] = args;
 
-      const image_path = sanitizeToRoot(path.join(this.imagePath, album), image);
+      const image_path = sanitizeToRoot(this.imagePath, path.join(album, image));
 
       // If they want a thumbnail, generate, cache, and return it instead
       if (thumb) {
         const san_thumb = sanitize(thumb);
-        const thumb_path = sanitizeToRoot(path.join(this.thumbPath, album), path.join(thumb, image));
+        let thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, thumb, image));
+        // TODO find a better way to do this rather than using extension
+        if (path.extname(image).toLowerCase() == '.mov') {
+          thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, image));
+        }
         return getThumbBuffer(image_path, thumb_path, san_thumb, (err, thumb_buffer, thumb_content_type) => {
           if (err) {
             // return the original image if there is an error
@@ -145,6 +145,26 @@ class imageHandler {
         }
         return _cb(undefined, image_buffer, image_content_type);
       });
+    });
+
+  }
+
+  video(album, image, _cb) {
+
+    sanitizeRequiredArguments([album], (err, args) => {
+      if (err || !args) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': err.message,
+          }
+        }, undefined, undefined);
+      }
+      const [album] = args;
+
+      const vid_path = sanitizeToRoot(this.imagePath, path.join(album, image));
+
+      return _cb(undefined, vid_path);
     });
 
   }
@@ -195,7 +215,10 @@ class imageHandler {
 
         let image_path = path.join(album_path, file);
         let thumb_path = path.join(this.thumbPath, album, thumb, file);
-        thumbnailSharp.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
+        if (path.extname(file).toLowerCase() == '.mov') {
+          thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, file));
+        }
+        imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
           if (!err) {
             images[file] = {
               // TODO: these are not necessarily png files
@@ -257,7 +280,7 @@ class imageHandler {
         let file = files[i];
         let image_path = path.join(album_path, file);
 
-        thumbnailSharp.getImageMetadata(image_path, (err, image_metadata) => {
+        imageProcessing.getMetadata(image_path, (err, image_metadata) => {
           if(!err) {
             // TODO description
             image_metadata['description'] = file;

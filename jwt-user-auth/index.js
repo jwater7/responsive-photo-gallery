@@ -41,12 +41,17 @@ class jwtUserAuth {
       this.db.push('/privateKey', this.privateKey);
     }
 
-    // If we passed in the private key then save it to use it
-    if (process.env.PRIVATE_KEY) {
-      this.db.push('/privateKey', this.privateKey);
-    }
     this.privateKey = crypto.randomBytes(3*4).toString('base64');
-    try { this.privateKey = this.db.getData('/privateKey'); } catch(e) {}
+    // If we passed in the private key then use it instead
+    if (process.env.PRIVATE_KEY) {
+      this.privateKey = process.env.PRIVATE_KEY;
+    }
+    // Override any generated or passed in keys if there's one in the DB
+    try {
+      dbPrivateKey = this.db.getData('/privateKey');
+      // if no exception so far then we use it here
+      this.privateKey = dbPrivateKey;
+    } catch(e) {}
 
     this.users = [];
     try { this.users = this.db.getData('/users'); } catch(e) {}

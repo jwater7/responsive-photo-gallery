@@ -251,6 +251,49 @@ router.get('/image', auth.required, function(req, res, next) {
 
 /**
  * @swagger
+ * /video:
+ *   get:
+ *     description: Download
+ *       Authentication token for requested info is required
+ *     parameters:
+ *       - name: album
+ *         in: query
+ *         description: Album name
+ *         schema:
+ *           type: string
+ *           required: true
+ *       - name: image
+ *         in: query
+ *         description: image name
+ *         schema:
+ *           type: string
+ *           required: true
+ *     responses:
+ *       200:
+ *         description: Returns the download
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.get('/video', auth.required, function(req, res, next) {
+
+  let album = req.query.album;
+  //TODO probably rename to video or something instead of image
+  let image = req.query.image;
+
+  handler.video(album, image, (err, video_file) => {
+    if (err) {
+      res.status(500);
+      res.json(err);
+      res.end();
+      return;
+    }
+    res.download(video_file);
+  });
+
+});
+
+/**
+ * @swagger
  * /thumbnails:
  *   get:
  *     description: Get base64 encoded images in json format for thumbnails

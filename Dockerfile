@@ -3,15 +3,23 @@ LABEL maintainer "j"
 
 # Backend node_modules
 WORKDIR /usr/src/app
+
+# Add ffmpeg runtime dependency
+RUN apk add --no-cache ffmpeg
+
+# Add sharp library dependencies, see: http://sharp.dimens.io/en/stable/install/
+RUN apk add vips-dev fftw-dev --update-cache --repository https://dl-3.alpinelinux.org/alpine/edge/testing/ \
+    && rm -rf /var/cache/apk/*
+
 # Install dependencies
 COPY package.json package-lock.json ./
+
 #RUN npm install
-# Build with gyp dependencies for sharp, see: http://sharp.dimens.io/en/stable/install/
+# Build using gyp dependencies for sharp, see https://github.com/nodejs/docker-node/issues/282
 RUN apk add --no-cache --virtual .gyp \
         python \
         make \
         g++ \
-    && apk add vips-dev fftw-dev --update-cache --repository https://dl-3.alpinelinux.org/alpine/edge/testing/ \
     && npm install \
     && apk del .gyp
 
