@@ -120,7 +120,23 @@ const API = {
     if (!opts.album || !opts.image || !opts.token) {
       return false;
     }
-    return(api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image);
+    let iurl = api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
+    if (opts.thumb) {
+      iurl += '&thumb=' + opts.thumb;
+    }
+    return iurl;
+  },
+
+  videourl: (opts) => {
+    if (!opts.album || !opts.image || !opts.token) {
+      return false;
+    }
+    //TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
+    let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
+    if (opts.thumb) {
+      iurl += '&thumb=' + opts.thumb;
+    }
+    return iurl;
   },
 
   appendThumbnail: (url, opts) => {

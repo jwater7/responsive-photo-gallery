@@ -239,8 +239,8 @@ function getVideoMetadata(src, cb) {
       //returnMetadata[''] = metadata.streams[i].codec_type; //'video'
 
       //returnMetadata['orientation']
-      //returnMetadata['orientedWidth']
-      //returnMetadata['orientedHeight']
+      returnMetadata['orientedWidth'] = metadata.streams[0].width; //1920
+      returnMetadata['orientedHeight'] = metadata.streams[0].height; //1080
       //returnMetadata['exifOrientation']
       //returnMetadata['exifGPS']
       return cb(undefined, returnMetadata);

@@ -149,6 +149,26 @@ class imageHandler {
 
   }
 
+  video(album, image, _cb) {
+
+    sanitizeRequiredArguments([album], (err, args) => {
+      if (err || !args) {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': err.message,
+          }
+        }, undefined, undefined);
+      }
+      const [album] = args;
+
+      const vid_path = sanitizeToRoot(path.join(this.imagePath, album), image);
+
+      return _cb(undefined, vid_path);
+    });
+
+  }
+
   thumbnails(album, thumb, _cb) {
 
     sanitizeRequiredArguments([album, thumb], (err, args) => {

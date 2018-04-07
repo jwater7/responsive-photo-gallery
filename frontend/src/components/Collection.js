@@ -1,6 +1,8 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
+import qs from 'query-string';
+
 import React from 'react';
 //import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
@@ -46,24 +48,18 @@ class Collection extends React.Component {
     if (!this.props.location.search) {
       return undefined;
     }
-    /*
-    var params = this.props.location.search.substr(1).split('&').reduce(function (q, query) {
-      var chunks = query.split('=');
-      var key = chunks[0];
-      var value = chunks[1];
-      return (q[key] = value, q);
-    }, {});
-    */
-    const params = new URLSearchParams(this.props.location.search);
-    //const json_filter = params['filter'];
-    const json_filter = params.get('filter');
+
+    //const params = new URLSearchParams(this.props.location.search);
+    const params = qs.parse(this.props.location.search);
+    const json_filter = params['filter'];
+    //const json_filter = params.get('filter');
     if (!json_filter) {
       return undefined;
     }
     const filter = JSON.parse(json_filter);
 
-    //const json_description = params['description'];
-    const json_description = params.get('description');
+    const json_description = params['description'];
+    //const json_description = params.get('description');
     if (!json_description) {
       return undefined;
     }
@@ -101,23 +97,39 @@ class Collection extends React.Component {
         continue;
       }
 
-      let imageurl = API.imageurl({
+      let imageparams = {
         token: this.props.authtoken,
         album: alb,
         image: filename,
-      })
+      };
+      // if it is a video then we want a thumbnail image url instead
+      if(this.props.list[alb][filename].format === 'video') {
+        imageparams['thumb'] = this.props.list[alb][filename].orientedWidth + 'x' + this.props.list[alb][filename].orientedHeight;
+      }
+
+      let imageurl = API.imageurl(imageparams);
       if(!imageurl) {
         continue;
       }
-      // if it is a video then we want a thumbnail image url instead
-      if(this.props.list[alb][filename].format === 'video') {
-        // TODO
-        imageurl = '';
-      }
+
       //let imageobj = {key: filename, src: imageurl, w: this.props.list[alb][filename].orientedWidth, h: this.props.list[alb][filename].orientedHeight};
       //let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
       let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].orientedWidth, height: this.props.list[alb][filename].orientedHeight};
       //let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].width, height: this.props.list[alb][filename].height};
+
+      // if it is a video then we want a thumbnail image url instead
+      if(this.props.list[alb][filename].format === 'video') {
+        let videoparams = {
+          token: this.props.authtoken,
+          album: alb,
+          image: filename,
+        };
+        imageobj['data-video-src'] = API.videourl(videoparams);
+        if(!imageobj['data-video-src']) {
+          continue;
+        }
+      }
+
       imagelist.push(imageobj);
     }
     if (!imagelist) {
@@ -128,6 +140,10 @@ class Collection extends React.Component {
 
   handleOnClick = (e, obj) => {
     //console.log(e.target);
+    if (e.target.getAttribute('data-video-src')) {
+      window.open(e.target.getAttribute('data-video-src'));
+      return;
+    }
     window.open(e.target.src);
     //console.log(obj);
     //window.open(obj.photo.src);
