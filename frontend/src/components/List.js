@@ -74,6 +74,17 @@ class List extends React.Component {
         thumbnailWidth: width,
         thumbnailHeight: height,
       };
+      // if it is actually a video, save location and trick the gallery
+      if(this.props.list[alb][filename].format === 'video') {
+        let videoparams = {
+          token: this.props.authtoken,
+          album: alb,
+          image: filename,
+        };
+        imageobj['data-video-src'] = API.videourl(videoparams);
+        delete imageobj['src'];
+        imageobj['html'] = '<div><center><h1>VIDEO</h1><h3><a href="' + imageobj['data-video-src'] + '">DOWNLOAD</a></h3></center></div>';
+      }
       imagelist.push(imageobj);
     }
     if (!imagelist) {
