@@ -86,10 +86,6 @@ const sanitizeRequiredArguments = (args, _cb) => {
   return _cb(undefined, san_args);
 }
 
-const sanitizeThumb = (thumb, _cb) => {
-  _cb(undefined, thumb);
-}
-
 class imageHandler {
   constructor(imagePath, thumbPath=false) {
     this.imagePath = imagePath;
@@ -109,12 +105,16 @@ class imageHandler {
       }
       const [album] = args;
 
-      const image_path = sanitizeToRoot(path.join(this.imagePath, album), image);
+      const image_path = sanitizeToRoot(this.imagePath, path.join(album, image));
 
       // If they want a thumbnail, generate, cache, and return it instead
       if (thumb) {
         const san_thumb = sanitize(thumb);
-        const thumb_path = sanitizeToRoot(path.join(this.thumbPath, album), path.join(thumb, image));
+        let thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, thumb, image));
+        // TODO find a better way to do this rather than using extension
+        if (path.extname(image).toLowerCase() == '.mov') {
+          thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, image));
+        }
         return getThumbBuffer(image_path, thumb_path, san_thumb, (err, thumb_buffer, thumb_content_type) => {
           if (err) {
             // return the original image if there is an error
@@ -162,7 +162,7 @@ class imageHandler {
       }
       const [album] = args;
 
-      const vid_path = sanitizeToRoot(path.join(this.imagePath, album), image);
+      const vid_path = sanitizeToRoot(this.imagePath, path.join(album, image));
 
       return _cb(undefined, vid_path);
     });
@@ -215,21 +215,15 @@ class imageHandler {
 
         let image_path = path.join(album_path, file);
         let thumb_path = path.join(this.thumbPath, album, thumb, file);
+        if (path.extname(file).toLowerCase() == '.mov') {
+          thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, file));
+        }
         imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
           if (!err) {
             images[file] = {
               // TODO: these are not necessarily png files
               base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
             };
-          } else {
-            // error in processing
-
-            // if its a movie, use a standard thumb
-            if (path.extname(file).toLowerCase() == '.mov') {
-              images[file] = {
-                base64tag: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAAOpgAABdwnLpRPAAAAAZiS0dEAAAAAAAA+UO7fwAAAAlwSFlzAAAASAAAAEgARslrPgAAAL9JREFUaN7t2M0NglAQReGjdcjaNmhXQwMuDA0pCVgALnQhyvshiJfE+yVvNyRzMjvAzMzsUwFUQAf0z1cGZuuXmSXm3l/W8teRD+vAfLnw3OSAKvLxGq6Q1EU+XsMVkvrEU19hdoD6CrMD1Ff4SoDyCgObQMCaDXbeqreZywFqDlBzgJoD1Byg5gA1B6g5QM0BamMBN/VSEW1OwFm9ZcQpZ2gPNOT9XvnluwC73NICOPI4mXrxFjhMWd7MzP7HHbf/+Yj2UMh7AAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDE4LTA0LTAyVDA4OjExOjU0KzAwOjAwZRIcqgAAACV0RVh0ZGF0ZTptb2RpZnkAMjAxOC0wNC0wMlQwODoxMTo1NCswMDowMBRPpBYAAAAodEVYdHN2ZzpiYXNlLXVyaQBmaWxlOi8vL3RtcC9tYWdpY2stVTgycHJVR2/WC3Y2AAAAAElFTkSuQmCC",
-              };
-            }
           }
 
           // Increment processing counter
