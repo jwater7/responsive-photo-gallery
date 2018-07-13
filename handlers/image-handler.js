@@ -334,9 +334,13 @@ class imageHandler {
 
       let dirs = {};
       for (let i = 0; i < files.length; i++) {
-        let file = files[i];
-        if (fs.statSync(path.join(this.imagePath, file)).isDirectory()) {
-          dirs[file] = {description: file};
+        try {
+          let file = files[i];
+          if (fs.statSync(path.join(this.imagePath, file)).isDirectory()) {
+            dirs[file] = {description: file};
+          }
+        } catch(e) {
+          //ignore failed stat, not a directory or file, probably failed symlink
         }
       }
 
