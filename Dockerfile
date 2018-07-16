@@ -12,7 +12,7 @@ RUN apk add vips-dev fftw-dev --update-cache --repository https://dl-3.alpinelin
     && rm -rf /var/cache/apk/*
 
 # Install dependencies
-COPY package.json package-lock.json ./
+COPY package.json ./
 
 #RUN npm install
 # Build using gyp dependencies for sharp, see https://github.com/nodejs/docker-node/issues/282
@@ -27,7 +27,7 @@ RUN apk add --no-cache --virtual .gyp \
 # Frontend node_modules
 WORKDIR /usr/src/app/frontend
 # Install dependencies
-COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/package.json ./
 RUN npm install
 
 # Bundle app source
