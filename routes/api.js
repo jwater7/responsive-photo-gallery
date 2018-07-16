@@ -4,7 +4,7 @@
 var express = require('express');
 var router = express.Router();
 
-const jwtAuth = require('../jwt-user-auth/index');
+const jwtAuth = require('jwt-user-auth');
 const auth_path = process.env.AUTH_PATH || '/data/auth';
 var auth = new jwtAuth(auth_path);
 

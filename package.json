@@ -16,6 +16,7 @@
     "express": "~4.15.5",
     "fluent-ffmpeg": "^2.1.2",
     "jsonwebtoken": "^8.1.0",
+    "jwt-user-auth": "jwater7/jwt-user-auth",
     "morgan": "~1.9.0",
     "node-json-db": "^0.7.3",
     "pug": "2.0.0-beta11",
