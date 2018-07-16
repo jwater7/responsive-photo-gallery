@@ -14,6 +14,7 @@
     "debug": "~2.6.9",
     "exif-reader": "^1.0.2",
     "express": "~4.15.5",
+    "fast-image-processing": "jwater7/fast-image-processing",
     "fluent-ffmpeg": "^2.1.2",
     "jsonwebtoken": "^8.1.0",
     "jwt-user-auth": "jwater7/jwt-user-auth",

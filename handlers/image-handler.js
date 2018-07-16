@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
-const imageProcessing = require('../image-processing/index');
+const imageProcessing = require('fast-image-processing');
 
 // Alternative to sanitize for paths
 const sanitizeToRoot = (rootDir, subDir) => {
