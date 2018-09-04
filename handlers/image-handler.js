@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const Promise = require('bluebird');
 const sanitize = require('sanitize-filename');
 
 const imageProcessing = require('fast-image-processing');
@@ -209,43 +210,46 @@ class imageHandler {
       }
       
       let images = {};
-      let done = 0;
-      for (let i = 0; i < files.length; i++) {
-        let file = files[i];
+      Promise.map(files, (file) => {
 
         let image_path = path.join(album_path, file);
         let thumb_path = path.join(this.thumbPath, album, thumb, file);
         if (path.extname(file).toLowerCase() == '.mov') {
           thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, file));
         }
-        imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
-          if (!err) {
-            images[file] = {
-              // TODO: these are not necessarily png files
-              base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
-            };
-          }
-
-          // Increment processing counter
-          done++;
-
-          // Last loop to return
-          if (done >= files.length) {
-            if (Object.keys(images).length === 0) {
-              return _cb({
-                'error': {
-                  'code': 500,
-                  'message': 'No Images Processed',
-                }
-              });
+        return new Promise((resolve, reject) => {
+          imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
+            if (!err) {
+              images[file] = {
+                // TODO: these are not necessarily png files
+                base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
+              }
             }
-            return _cb({
-              'result': images,
-            });
+            resolve()
+          })
+        })
+      }, { concurrency: 16 })
+      .then(() => {
+        if (Object.keys(images).length === 0) {
+          return _cb({
+            'error': {
+              'code': 500,
+              'message': 'No Images Processed',
+            }
+          })
+        }
+        return _cb({
+          'result': images,
+        })
+      }).catch((err) => {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': 'Internal error: ' + err,
           }
-        });
-      }
-    });
+        })
+      })
+    })
   }
 
   list(album, _cb) {
@@ -275,38 +279,40 @@ class imageHandler {
       }
 
       let images = {};
-      let done = 0;
-      for (let i = 0; i < files.length; i++) {
-        let file = files[i];
+      Promise.map(files, (file) => {
         let image_path = path.join(album_path, file);
 
-        imageProcessing.getMetadata(image_path, (err, image_metadata) => {
-          if(!err) {
-            // TODO description
-            image_metadata['description'] = file;
-            images[file] = image_metadata;
-          }
-
-          // Increment processing counter
-          done++;
-
-          // Last loop to return
-          if (done >= files.length) {
-            if (Object.keys(images).length === 0) {
-              return _cb({
-                'error': {
-                  'code': 500,
-                  'message': 'No Images Processed',
-                }
-              });
+        return new Promise((resolve, reject) => {
+          imageProcessing.getMetadata(image_path, (err, image_metadata) => {
+            if(!err) {
+              // TODO description
+              image_metadata['description'] = file;
+              images[file] = image_metadata;
             }
-            return _cb({
-              'result': images,
-            });
+            resolve()
+          })
+        })
+      }, { concurrency: 16 })
+      .then(() => {
+        if (Object.keys(images).length === 0) {
+          return _cb({
+            'error': {
+              'code': 500,
+              'message': 'No Images Processed',
+            }
+          })
+        }
+        return _cb({
+          'result': images,
+        })
+      }).catch((err) => {
+        return _cb({
+          'error': {
+            'code': 500,
+            'message': 'Internal error: ' + err,
           }
-
-        });
-      }
+        })
+      })
     });
 
   }

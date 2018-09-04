@@ -9,6 +9,7 @@
     "build-frontend": "cd frontend; npm run build; cd .."
   },
   "dependencies": {
+    "bluebird": "^3.5.2",
     "body-parser": "~1.18.2",
     "cookie-parser": "~1.4.3",
     "debug": "~2.6.9",
