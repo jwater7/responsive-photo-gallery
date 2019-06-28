@@ -8,7 +8,9 @@ WORKDIR /usr/src/app
 RUN apk add --no-cache ffmpeg
 
 # Add sharp library dependencies, see: http://sharp.dimens.io/en/stable/install/
-RUN apk add vips-dev fftw-dev --update-cache --repository https://dl-3.alpinelinux.org/alpine/edge/testing/ \
+RUN apk add vips-dev fftw-dev build-base --update-cache \
+    --repository https://alpine.global.ssl.fastly.net/alpine/edge/community/ \
+    --repository https://alpine.global.ssl.fastly.net/alpine/edge/main \
     && rm -rf /var/cache/apk/*
 
 # Install dependencies
