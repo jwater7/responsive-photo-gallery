@@ -172,6 +172,18 @@ router.get('/albums', auth.required, function(req, res, next) {
  *         schema:
  *           type: string
  *           required: true
+ *       - name: num_results
+ *         in: query
+ *         description: an optional max number of files to return (e.g. "25")
+ *         schema:
+ *           type: integer
+ *           required: false
+ *       - name: distributed
+ *         in: query
+ *         description: an optional flag if num_results should be spread out (e.g. true)
+ *         schema:
+ *           type: boolean
+ *           required: false
  *     responses:
  *       200:
  *         description: Returns JSON list
@@ -183,10 +195,7 @@ router.get('/albums', auth.required, function(req, res, next) {
  *       - ApiKeyAuth: []
  */
 router.get('/list', auth.required, function(req, res, next) {
-
-  var album = req.query.album;
-
-  function cb(args) {
+  handler.list(req.query.album, req.query.num_results, req.query.distributed, function cb(args) {
     if (args.error || !args.result) {
       res.status(500);
     } else {
@@ -194,8 +203,7 @@ router.get('/list', auth.required, function(req, res, next) {
     }
     res.json(args);
     res.end();
-  }
-  handler.list(album, cb);
+  });
 });
 
 /**
@@ -313,6 +321,18 @@ router.get('/video', auth.required, function(req, res, next) {
  *         schema:
  *           type: string
  *           required: true
+ *       - name: num_results
+ *         in: query
+ *         description: an optional max number of files to return (e.g. "25")
+ *         schema:
+ *           type: integer
+ *           required: false
+ *       - name: distributed
+ *         in: query
+ *         description: an optional flag if num_results should be spread out (e.g. true)
+ *         schema:
+ *           type: boolean
+ *           required: false
  *     responses:
  *       200:
  *         description: Returns JSON list
@@ -324,11 +344,7 @@ router.get('/video', auth.required, function(req, res, next) {
  *       - ApiKeyAuth: []
  */
 router.get('/thumbnails', auth.required, function(req, res, next) {
-
-  var album = req.query.album;
-  let thumb = req.query.thumb;
-
-  function cb(args) {
+  handler.thumbnails(req.query.album, req.query.thumb, req.query.num_results, req.query.distributed, function cb(args) {
     if (args.error || !args.result) {
       res.status(500);
     } else {
@@ -336,9 +352,7 @@ router.get('/thumbnails', auth.required, function(req, res, next) {
     }
     res.json(args);
     res.end();
-  }
-  handler.thumbnails(album, thumb, cb);
-
+  });
 });
 
 module.exports = router;

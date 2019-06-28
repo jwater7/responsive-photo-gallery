@@ -89,7 +89,8 @@ const API = {
     //    'X-API-Key': opts.token,
     //  },
     //})
-    fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album)
+    const max_list_items = opts.max_list_items ? opts.max_list_items : '';
+    fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true')
       .then(res => res.json())
       .then(jsonData => {
         if (jsonData.error) {
@@ -103,7 +104,8 @@ const API = {
   },
 
   thumbnails: (_cb, opts) => {
-    fetch(api_prefix + '/thumbnails?token=' + opts.token + '&album=' + opts.album + '&thumb=' + opts.thumb)
+    const max_list_items = opts.max_list_items ? opts.max_list_items : '';
+    fetch(api_prefix + '/thumbnails?token=' + opts.token + '&album=' + opts.album + '&thumb=' + opts.thumb + '&num_results=' + max_list_items + '&distributed=true')
       .then(res => res.json())
       .then(jsonData => {
         if (jsonData.error) {

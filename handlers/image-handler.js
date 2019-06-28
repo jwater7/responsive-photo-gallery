@@ -87,6 +87,33 @@ const sanitizeRequiredArguments = (args, _cb) => {
   return _cb(undefined, san_args);
 }
 
+const limitResults = (list, num_results, distributed) => {
+
+  // sanitize input
+  // make sure we have valid input
+  const san_num_results = parseInt(num_results);
+  if (+num_results !== san_num_results) {
+    return [];
+  }
+  const san_distributed = (distributed === "true");
+
+  // return a first chunk if not distributing results
+  if (!san_distributed) {
+    return list.slice(0, san_num_results);
+  }
+
+  let ret_list = []
+  if (san_num_results) {
+    const delta = san_num_results >= list.length ? 1 : Math.ceil(list.length / san_num_results);
+    if (delta) {
+      for (let i = 0; i < list.length; i=i+delta) {
+        ret_list.push(list[i]);
+      }
+    }
+  }
+  return ret_list;
+}
+
 class imageHandler {
   constructor(imagePath, thumbPath=false) {
     this.imagePath = imagePath;
@@ -170,7 +197,7 @@ class imageHandler {
 
   }
 
-  thumbnails(album, thumb, _cb) {
+  thumbnails(album, thumb, num_results, distributed, _cb) {
 
     sanitizeRequiredArguments([album, thumb], (err, args) => {
       if (err || !args) {
@@ -207,6 +234,11 @@ class imageHandler {
             'message': 'No Files Processed',
           }
         });
+      }
+
+      // Process only a subset if requested
+      if (num_results) {
+        files = limitResults(files, num_results, distributed);
       }
       
       let images = {};
@@ -252,7 +284,7 @@ class imageHandler {
     })
   }
 
-  list(album, _cb) {
+  list(album, num_results, distributed, _cb) {
 
     sanitizeRequiredArguments([album], (err, args) => {
       if (err || !args) {
@@ -278,18 +310,25 @@ class imageHandler {
         });
       }
 
+      // Process only a subset if requested
+      if (num_results) {
+        files = limitResults(files, num_results, distributed);
+      }
+
       let images = {};
       Promise.map(files, (file) => {
         let image_path = path.join(album_path, file);
 
         return new Promise((resolve, reject) => {
           imageProcessing.getMetadata(image_path, (err, image_metadata) => {
-            if(!err) {
-              // TODO description
-              image_metadata['description'] = file;
-              images[file] = image_metadata;
+            if(err) {
+              console.log(err);
+              return resolve();
             }
-            resolve()
+            // TODO description
+            image_metadata['description'] = file;
+            images[file] = image_metadata;
+            return resolve()
           })
         })
       }, { concurrency: 16 })

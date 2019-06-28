@@ -12,6 +12,11 @@ const mapStateToProps = (state) => {
   }
 }
 
+let max_list_items = 50;
+if (process.env.REACT_APP_MAX_LIST) {
+  max_list_items = process.env.REACT_APP_MAX_LIST;
+}
+
 const mapDispatchToProps = (dispatch) => {
   return {
     addThumbs: (album, dim, authtoken) => {
@@ -22,6 +27,7 @@ const mapDispatchToProps = (dispatch) => {
         token: authtoken,
         album: album,
         thumb: dim,
+        max_list_items,
       });
     },
   }
