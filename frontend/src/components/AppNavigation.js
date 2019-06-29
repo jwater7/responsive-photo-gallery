@@ -1,4 +1,5 @@
 import React from 'react';
+import API from '../api';
 import { Link } from 'react-router-dom';
 import { Navbar } from 'react-bootstrap';
 import PublicNavigation from './PublicNavigation';
@@ -17,6 +18,15 @@ class AppNavigation extends React.Component {
 
   componentDidMount() {
     document.title = this.props.pagetitle;
+
+    // Check state of auth token expiration
+    API.ping((good) => {
+      if(!good) {
+        this.props.updateAuthCB(false);
+      }
+    }, {
+      token: this.props.authtoken,
+    });
   }
 
   render() {

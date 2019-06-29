@@ -35,7 +35,7 @@ class App extends React.Component {
     super(props);
 
     let authtoken = cookies.get('authtoken');
-    // ugh, cookies are strings, catch the bool
+    // ugh, cookies are strings, make the bool a bool
     if (authtoken === "false") {
       authtoken = JSON.parse(authtoken);
     }
@@ -57,7 +57,7 @@ class App extends React.Component {
     return (
       <Router basename={basename}>
         <div className="App">
-          <AppNavigation pagetitle={title} authtoken={this.state.authtoken} {...this.props} />
+          <AppNavigation pagetitle={title} authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} {...this.props} />
           <AppMain authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} {...this.props} />
         </div>
       </Router>

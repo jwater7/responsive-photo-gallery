@@ -34,6 +34,36 @@ router.use(auth.authenticate.bind(auth));
 
 /**
  * @swagger
+ * /ping:
+ *   get:
+ *     description: Check login status
+ *     produces:
+ *       - application/json
+ *     parameters:
+ *       - name: token
+ *         in: query
+ *         description: auth token
+ *         schema:
+ *           type: string
+ *           required: true
+ *     responses:
+ *       200:
+ *         description: Returns auth token
+ *       403:
+ *         description: Logged out
+ *     security:
+ *       - ApiKeyAuth: []
+ */
+router.all('/ping', auth.required, function(req, res, next) {
+  var token = req.body.token || req.query.token || req.headers['x-api-key'];
+  res.status(200).json({
+    result: token,
+  });
+  res.end();
+});
+
+/**
+ * @swagger
  * /logout:
  *   post:
  *     description: Log out

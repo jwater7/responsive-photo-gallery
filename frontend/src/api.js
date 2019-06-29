@@ -48,6 +48,16 @@ const API = {
       .catch(error => console.log('FETCH ERROR: ' + error.message));
   },
 
+  ping: (_cb, opts) => {
+    fetch(api_prefix + '/ping?token=' + opts.token)
+      .then(res => res.json())
+      .then(jsonData => {
+        _cb(jsonData.result && jsonData.result === opts.token);
+      })
+      // TODO debug log
+      .catch(error => console.log('FETCH ERROR: ' + error.message));
+  },
+
   logout: (_cb, opts) => {
     fetch(api_prefix + '/logout', {
       method: 'POST',
