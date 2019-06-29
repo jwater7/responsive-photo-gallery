@@ -351,6 +351,12 @@ router.get('/video', auth.required, function(req, res, next) {
  *         schema:
  *           type: string
  *           required: true
+ *       - name: image
+ *         in: query
+ *         description: an optional image name to limit to single one
+ *         schema:
+ *           type: string
+ *           required: false
  *       - name: num_results
  *         in: query
  *         description: an optional max number of files to return (e.g. "25")
@@ -374,7 +380,7 @@ router.get('/video', auth.required, function(req, res, next) {
  *       - ApiKeyAuth: []
  */
 router.get('/thumbnails', auth.required, function(req, res, next) {
-  handler.thumbnails(req.query.album, req.query.thumb, req.query.num_results, req.query.distributed, function cb(args) {
+  handler.thumbnails(req.query.album, req.query.thumb, req.query.image, req.query.num_results, req.query.distributed, function cb(args) {
     if (args.error || !args.result) {
       res.status(500);
     } else {

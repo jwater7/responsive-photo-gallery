@@ -201,7 +201,7 @@ class imageHandler {
 
   }
 
-  thumbnails(album, thumb, num_results, distributed, _cb) {
+  thumbnails(album, thumb, image, num_results, distributed, _cb) {
 
     sanitizeRequiredArguments([album, thumb], (err, args) => {
       if (err || !args) {
@@ -214,20 +214,39 @@ class imageHandler {
       }
       const [album, thumb] = args;
 
-      // make sure we have valid input
-      const [ width, height ] = thumb.split('x');
-      const san_width = parseInt(width);
-      const san_height = parseInt(height);
-      if (+width !== san_width || +height !== san_height) {
-        return _cb({
-          'error': {
-            'code': 500,
-            'message': 'malformed argument',
+      let album_path = path.join(this.imagePath, album);
+
+
+      // If they only want a single thumbnail, generate, cache, and return it instead
+      if (image) {
+        const image_path = sanitizeToRoot(this.imagePath, path.join(album, image));
+        const san_thumb = sanitize(thumb);
+        let thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, thumb, image));
+        // TODO find a better way to do this rather than using extension
+        if (path.extname(image).toLowerCase() == '.mov') {
+          thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, image));
+        }
+        return getThumbBuffer(image_path, thumb_path, san_thumb, (err, thumb_buffer, thumb_content_type) => {
+          if(err) {
+            debugErr(err);
+            return _cb({
+              'error': {
+                'code': 500,
+                'message': 'Unable to get thumb image',
+              }
+            }, undefined, undefined);
           }
-        });
+          let images = {};
+          images[image] = {
+            // TODO: these are not necessarily png files
+            base64tag: "data:" + thumb_content_type + ";base64," + thumb_buffer.toString('base64'),
+          }
+          return _cb({
+            'result': images,
+          })
+        })
       }
 
-      let album_path = path.join(this.imagePath, album);
       let files = walkDir(album_path);
  
       // No files to loop on
@@ -248,20 +267,21 @@ class imageHandler {
       let images = {};
       Promise.map(files, (file) => {
 
-        let image_path = path.join(album_path, file);
+        const san_thumb = sanitize(thumb);
+        const image_path = path.join(album_path, file);
         let thumb_path = path.join(this.thumbPath, album, thumb, file);
         if (path.extname(file).toLowerCase() == '.mov') {
           thumb_path = sanitizeToRoot(this.thumbPath, path.join(album, 'video', thumb, file));
         }
         return new Promise((resolve, reject) => {
-          imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
+          getThumbBuffer(image_path, thumb_path, san_thumb, (err, thumb_buffer, thumb_content_type) => {
             if(err) {
               debugErr(err);
               return resolve();
             }
             images[file] = {
               // TODO: these are not necessarily png files
-              base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
+              base64tag: "data:" + thumb_content_type + ";base64," + thumb_buffer.toString('base64'),
             }
             return resolve()
           })
@@ -280,6 +300,7 @@ class imageHandler {
           'result': images,
         })
       }).catch((err) => {
+        debugErr(err.stack);
         return _cb({
           'error': {
             'code': 500,
@@ -323,7 +344,7 @@ class imageHandler {
 
       let images = {};
       Promise.map(files, (file) => {
-        let image_path = path.join(album_path, file);
+        const image_path = path.join(album_path, file);
 
         return new Promise((resolve, reject) => {
           imageProcessing.getMetadata(image_path, (err, image_metadata) => {
@@ -351,6 +372,7 @@ class imageHandler {
           'result': images,
         })
       }).catch((err) => {
+        debugErr(err.stack);
         return _cb({
           'error': {
             'code': 500,
