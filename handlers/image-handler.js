@@ -10,6 +10,9 @@ const sanitize = require('sanitize-filename');
 
 const imageProcessing = require('fast-image-processing');
 
+const debug = require('debug')('responsive-photo-gallery:image-handler');
+const debugErr = require('debug')('responsive-photo-gallery:image-handler:error');
+
 // Alternative to sanitize for paths
 const sanitizeToRoot = (rootDir, subDir) => {
   var s = path.resolve(path.join(path.resolve(rootDir), path.normalize(subDir)));
@@ -104,9 +107,10 @@ const limitResults = (list, num_results, distributed) => {
 
   let ret_list = []
   if (san_num_results) {
-    const delta = san_num_results >= list.length ? 1 : Math.ceil(list.length / san_num_results);
+    const delta = san_num_results >= list.length ? 1 : Math.floor(list.length / san_num_results);
     if (delta) {
-      for (let i = 0; i < list.length; i=i+delta) {
+      for (let i = 0; i < list.length && ret_list.length < san_num_results; i=i+delta) {
+        //debug(i, delta, san_num_results, list.length);
         ret_list.push(list[i]);
       }
     }
@@ -251,13 +255,15 @@ class imageHandler {
         }
         return new Promise((resolve, reject) => {
           imageProcessing.cacheThumbAndGetBuffer(image_path, thumb_path, san_width, san_height, (err, image_buffer, image_content_type) => {
-            if (!err) {
-              images[file] = {
-                // TODO: these are not necessarily png files
-                base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
-              }
+            if(err) {
+              debugErr(err);
+              return resolve();
             }
-            resolve()
+            images[file] = {
+              // TODO: these are not necessarily png files
+              base64tag: "data:" + image_content_type + ";base64," + image_buffer.toString('base64'),
+            }
+            return resolve()
           })
         })
       }, { concurrency: 16 })
@@ -322,7 +328,7 @@ class imageHandler {
         return new Promise((resolve, reject) => {
           imageProcessing.getMetadata(image_path, (err, image_metadata) => {
             if(err) {
-              console.log(err);
+              debugErr(err);
               return resolve();
             }
             // TODO description
