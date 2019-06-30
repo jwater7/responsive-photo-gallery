@@ -9,9 +9,51 @@ import API from '../api';
 //import ImageList from './ImageList';
 import { PhotoSwipeGallery } from 'react-photoswipe';
 
+class ImageWithStatusText extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { loaded: false };
+  }
+
+  handleImageLoaded() {
+    this.setState({ loaded: true });
+  }
+
+  render() {
+    return (
+      <div>
+        {!this.state.loaded ? (
+          <svg width="100" height="100" viewBox="0 0 100 100">  
+            <rect width="100" height="100" rx="10" ry="10" fill="#CCC" />
+          </svg>
+        ) : null}
+        <img
+          alt={this.props.alt}
+          src={this.props.src}
+          width={this.props.width}
+          height={this.props.height}
+          style={!this.state.loaded ? { visibility: 'hidden' } : {}}
+          onLoad={this.handleImageLoaded.bind(this)}
+        />
+      </div>
+    );
+  }
+}
+
 const getThumbnailContent = (item) => {
+  if (item['data-video-src']) {
+    return (
+      <div style={{position: 'relative'}}>
+        <ImageWithStatusText alt={item.key} src={item.thumbnail} width={item.thumbnailWidth} height={item.thumbnailHeight} />
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26" style={{position:'absolute', bottom:0, opacity: .4}}>
+          <polygon points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>
+          <path d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>
+        </svg> 
+      </div>
+    )
+  }
   return (
-    <img alt={item.key} src={item.thumbnail} width={item.thumbnailWidth} height={item.thumbnailHeight} />
+    <ImageWithStatusText alt={item.key} src={item.thumbnail} width={item.thumbnailWidth} height={item.thumbnailHeight} />
   );
 }
 
@@ -25,9 +67,9 @@ class List extends React.Component {
       this.props.loadList(this.props.match.params.album, this.props.authtoken);
     }
 
-    if (!(this.props.match.params.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.match.params.album])) {
-      this.props.addThumbs(this.props.match.params.album, this.thumbDim, this.props.authtoken);
-    }
+    //if (!(this.props.match.params.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.match.params.album])) {
+    //  this.props.addThumbs(this.props.match.params.album, this.thumbDim, this.props.authtoken);
+    //}
 
   }
 
@@ -43,7 +85,8 @@ class List extends React.Component {
       return [];
     }
     const alb = this.props.match.params.album;
-    if (!(alb in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[alb]) || !(alb in this.props.list)) {
+    //if (!(alb in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[alb]) || !(alb in this.props.list)) {
+    if (!(alb in this.props.list)) {
       return [];
     }
     let imagelist = [];
@@ -59,10 +102,16 @@ class List extends React.Component {
       if(!imageurl) {
         continue;
       }
-      if (!(filename in this.props.thumbs[alb][this.thumbDim])) {
-        continue;
-      }
-      let thumburl = this.props.thumbs[alb][this.thumbDim][filename].base64tag;
+      let thumburl = API.imageurl({
+        token: this.props.authtoken,
+        album: alb,
+        image: filename,
+        thumb: this.thumbDim,
+      })
+      //if (!(filename in this.props.thumbs[alb][this.thumbDim])) {
+      //  continue;
+      //}
+      //let thumburl = this.props.thumbs[alb][this.thumbDim][filename].base64tag;
       //let imageobj = {key: filename, src: thumburl, width, height, orig: imageurl};
       let imageobj = {
         key: filename,
@@ -83,7 +132,14 @@ class List extends React.Component {
         };
         imageobj['data-video-src'] = API.videourl(videoparams);
         delete imageobj['src'];
-        imageobj['html'] = '<div><center><h1>VIDEO</h1><h3><a href="' + imageobj['data-video-src'] + '">DOWNLOAD</a></h3></center></div>';
+        // TODO this is messy and duplicated from above
+        imageobj['html'] = '<div style="padding-top: 44px; height: 100%; text-align: center"><a href="' + imageobj['data-video-src'] + '">' + 
+          '<div style="position: relative; display: inline-block;"><img src=' + thumburl + ' style="display: block; height: auto;"/><svg style="position: absolute; top: 0; left: 0; opacity: .4; width: 100px;" viewBox="0 0 26 26">' + 
+          '' + 
+          '<polygon points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>' + 
+          '<path d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>' + 
+          '</svg></div>' + 
+          '</a></div>';
       }
       imagelist.push(imageobj);
     }
