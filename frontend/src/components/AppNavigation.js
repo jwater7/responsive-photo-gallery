@@ -22,8 +22,9 @@ class AppNavigation extends React.Component {
     // Check state of auth token expiration
     API.ping((good) => {
       if(!good) {
-        this.props.updateAuthCB(false);
+        return this.props.updateAuthCB(false);
       }
+      this.props.updateAuthCB(true);
     }, {
       token: this.props.authtoken,
     });

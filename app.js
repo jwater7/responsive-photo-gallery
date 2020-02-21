@@ -2,6 +2,7 @@
 //
 
 var express = require('express');
+const createError = require('http-errors')
 var path = require('path');
 var favicon = require('serve-favicon');
 var logger = require('morgan');
@@ -9,6 +10,13 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var swaggerUi = require('swagger-ui-express');
 var swaggerJSDoc = require('swagger-jsdoc');
+const passport = require('passport')
+const { Strategy: JwtCookieComboStrategy } = require('passport-jwt-cookiecombo')
+
+const jwtAuth = require('jwt-user-auth');
+const auth_path = process.env.AUTH_PATH || '/data/auth';
+var auth = new jwtAuth(auth_path);
+
 var pjson = require('./package.json');
 
 var api = require('./routes/api');
@@ -22,13 +30,29 @@ app.set('view engine', 'pug');
 app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser());
+app.use(cookieParser('TODO Needs a Secret'));
 // TODO uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 //app.use(express.static(path.join(__dirname, 'public')));
 
+// Passport.js
+// passport.use(jwtStrategy());
+passport.use(
+  new JwtCookieComboStrategy(
+    {
+      // jwtCookieName: 'jwt',
+      // jwtHeaderKey: 'Authorization',
+      // jwtCookieSecure: true,
+      secretOrPublicKey: process.env.JWT_KEY_PUB || auth.privateKey,
+    },
+    // If we get here then we have a verified jwt signed correctly so just return decoded jwt
+    // (jwt_payload, done) => done(null, jwt_payload, { info: "success" })
+    (jwt_payload, done) => done(null, jwt_payload)
+  )
+)
+
 // routes
-app.use('/api/v1/', api);
+app.use('/api/v1/', api({passport, auth}));
 
 // swagger
 var rootpath = process.env.SWAGGER_ROOT_PATH || '';
@@ -80,9 +104,21 @@ app.use(function(err, req, res, next) {
   res.locals.message = err.message;
   res.locals.error = req.app.get('env') === 'development' ? err : {};
 
+  let sanErr = err
+  if (err.name === 'AuthenticationError') {
+    sanErr = createError(401, 'Unauthorized', {
+      expose: true,
+    })
+  }
+
   // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+  res.status(sanErr.status || 500);
+  // TODO handle errors with more info
+  res.json({
+    error: {
+      status: sanErr.status || 500,
+    },
+  })
 });
 
 module.exports = app;

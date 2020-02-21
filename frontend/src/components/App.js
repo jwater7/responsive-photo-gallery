@@ -12,7 +12,7 @@ import AppMain from './AppMain';
 
 const title = 'Responsive Photo Gallery';
 
-const cookies = new Cookies();
+// TODO const cookies = new Cookies();
 
 // TODO pass in
 var basename = '/';
@@ -34,19 +34,21 @@ class App extends React.Component {
   constructor(props) {
     super(props);
 
+    /* TODO 
     let authtoken = cookies.get('authtoken');
     // ugh, cookies are strings, make the bool a bool
     if (authtoken === "false") {
       authtoken = JSON.parse(authtoken);
     }
+    */
 
     this.state = {
-      authtoken: authtoken,
+      authtoken: false,
     };
   }
 
   updateAuth = (token) => {
-    cookies.set('authtoken', token, {path: '/'});
+    // TODO cookies.set('authtoken', token, {path: '/'});
     this.setState({authtoken: token});
     //if (!token) {
     //  cookies.remove('authtoken');
