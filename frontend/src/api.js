@@ -71,7 +71,11 @@ const API = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(opts),
+      body: JSON.stringify({
+        cookie_path: base_prefix,
+        cookie_max_age_sec: 60*60*24*365,
+        ...opts,
+      }),
     })
       .then(res => res.json())
       .then(jsonData => {
