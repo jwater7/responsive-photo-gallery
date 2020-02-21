@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
-import Cookies from 'universal-cookie';
+// TODO import Cookies from 'universal-cookie';
 
 import AppNavigation from './AppNavigation';
 import AppMain from './AppMain';
