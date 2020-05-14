@@ -23,7 +23,7 @@ The backend may be customized using environment variables:
 * PORT (default 3000)
   Set express server port
 * DEFAULT_PASSWORD (default is a random base64 string)
-  Sets the default API admin passwordA (written to config file)
+  Sets the default API admin password (written to config file)
 * DEFAULT_PRIVATE_KEY (default is a random base64 string)
   Sets the JSON Web Token signing key (to be consistent over reboots)
 * PRIVATE_KEY (default is a random base64 string)
@@ -36,6 +36,8 @@ The backend may be customized using environment variables:
   Sets the path to the thumb data directory for caching persistance
 * DEBUG
   You may also use the debug package variables for some debugging output (for example, DEBUG=express,responsive-photo-gallery:\*)
+* NO_AUTHENTICATION (default false)
+  If set to "yes" then all users will have full access to all read-only backend calls and will not be prompted for a password
 
 The frontend may be customized using these environment variables:
 * PUBLIC_URL (default '')

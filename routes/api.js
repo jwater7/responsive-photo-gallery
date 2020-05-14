@@ -14,7 +14,7 @@ module.exports = ({passport, auth}) => {
 
   var router = express.Router();
 
-  const required = passport.authenticate('jwt-cookiecombo', {
+  const required = process.env.NO_AUTHENTICATION === 'yes' ? [] : passport.authenticate('jwt-cookiecombo', {
     session: false,
     failWithError: true,
   })
