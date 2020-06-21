@@ -5,8 +5,9 @@ const PublicOnlyRoute = ({ component: Component, authtoken, ...rest }) => (
   <Route {...rest} render={(routeProps) => {
     //if (authtoken) return <div></div>;
     return !authtoken ?
-    //(React.createElement(component, { ...routeProps, authtoken, ...rest })) :
-    (<Component {...routeProps} authtoken={authtoken} {...rest} />) :
+      authtoken === null ? <React.Fragment/> : 
+        //(React.createElement(component, { ...routeProps, authtoken, ...rest })) :
+        (<Component {...routeProps} authtoken={authtoken} {...rest} />) :
     (<Redirect to="/" />);
   }} />
 );

@@ -9,6 +9,7 @@ import AppNavigation from './AppNavigation';
 import AppMain from './AppMain';
 //import logo from './logo.svg';
 //import './App.css';
+import API from '../api';
 
 const title = 'Responsive Photo Gallery';
 
@@ -43,7 +44,7 @@ class App extends React.Component {
     */
 
     this.state = {
-      authtoken: false,
+      authtoken: null,
     };
   }
 
@@ -55,12 +56,17 @@ class App extends React.Component {
     //}
   }
 
+  async componentDidMount() {
+    // Check state of auth token expiration
+    this.updateAuth(await API.ping({token: this.state.authtoken}))
+  }
+
   render() {
     return (
       <Router basename={basename}>
         <div className="App">
-          <AppNavigation pagetitle={title} authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} {...this.props} />
-          <AppMain authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} {...this.props} />
+          <AppNavigation pagetitle={title} authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} basename={basename} {...this.props} />
+          <AppMain authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} basename={basename} {...this.props} />
         </div>
       </Router>
     );

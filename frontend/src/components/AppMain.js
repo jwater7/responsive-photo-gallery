@@ -15,11 +15,13 @@ import Landing from './Landing';
 import AlbumsContainer from './AlbumsContainer';
 import ListContainer from './ListContainer';
 import CollectionContainer from './CollectionContainer';
+import SingleViewContainer from './SingleViewContainer';
 
 const AppMain = (props) => (
   <Grid>
     <Switch>
       <PropsRoute exact name="landing" path="/" component={Landing} {...props} />
+      <AuthenticatedRoute path="/singleview/:album" component={SingleViewContainer} {...props} />
       <AuthenticatedRoute path="/list/:album" component={ListContainer} {...props} />
       <AuthenticatedRoute path="/collection/:album" component={CollectionContainer} {...props} />
       <AuthenticatedRoute exact path="/albums" component={AlbumsContainer} {...props} />

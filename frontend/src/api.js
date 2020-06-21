@@ -52,17 +52,13 @@ const API = {
       .catch(error => console.log('FETCH ERROR: ' + error.message));
   },
 
-  ping: (_cb, opts) => {
+  ping: (opts) => 
     // TODO fetch(api_prefix + '/ping?token=' + opts.token)
     fetch(api_prefix + '/ping')
       .then(res => res.json())
-      .then(jsonData => {
-        // TODO _cb(jsonData.result && jsonData.result === opts.token);
-        _cb(jsonData && !jsonData.error);
-      })
+      .then(jsonData => (jsonData && !jsonData.error))
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
-  },
+      .catch(error => console.log('FETCH ERROR: ' + error.message)),
 
   logout: (_cb, opts) => {
     fetch(api_prefix + '/logout', {

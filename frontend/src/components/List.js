@@ -2,12 +2,13 @@
 //
 
 import React from 'react';
+import ReactDOMServer from 'react-dom/server';
 import { Link } from 'react-router-dom';
 import { Breadcrumb, Row, Col } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
 //import ImageList from './ImageList';
-import { PhotoSwipeGallery } from 'react-photoswipe';
+import { PhotoSwipeGallery } from 'react-photoswipe-2';
 
 class ImageWithStatusText extends React.Component {
   constructor(props) {
@@ -45,7 +46,7 @@ const getThumbnailContent = (item) => {
     return (
       <div style={{position: 'relative'}}>
         <ImageWithStatusText alt={item.key} src={item.thumbnail} width={item.thumbnailWidth} height={item.thumbnailHeight} />
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26" style={{position:'absolute', bottom:0, opacity: .4}}>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26" style={{position:'absolute', bottom:0, opacity: .4, width: '100%'}}>
           <polygon points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>
           <path d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>
         </svg> 
@@ -56,6 +57,22 @@ const getThumbnailContent = (item) => {
     <ImageWithStatusText alt={item.key} src={item.thumbnail} width={item.thumbnailWidth} height={item.thumbnailHeight} />
   );
 }
+
+const VideoHtml = (props) => (
+  <div style={{paddingTop: '44px', height: '100%', textAlign: 'center'}}>
+    <a href={props.basename + "singleview/" + props.album + "?imageurl=" + encodeURIComponent(props.image) + "&thumburl=" + encodeURIComponent(props.thumburl)}>
+      <div style={{position: 'relative', display: 'inline-block', width: '100%', height: '100%', paddingBottom: '88px'}}>
+        <div style={{position: 'relative', display: 'block', height: '100%'}}>
+          <img src={props.thumburl} style={{display: 'block', height: '100%', margin: '0 auto'}} alt="thumbnail"/>
+          <svg style={{position: 'absolute', top: 0, left: '50%', transform: 'translate(-50%)', opacity: '.4', height: '100%'}} viewBox="0 0 26 26">
+            <polygon points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>
+            <path d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>
+          </svg>
+        </div>
+      </div>
+    </a>
+  </div>
+);
 
 class List extends React.Component {
 
@@ -133,13 +150,22 @@ class List extends React.Component {
         imageobj['data-video-src'] = API.videourl(videoparams);
         delete imageobj['src'];
         // TODO this is messy and duplicated from above
-        imageobj['html'] = '<div style="padding-top: 44px; height: 100%; text-align: center"><a href="' + imageobj['data-video-src'] + '">' + 
-          '<div style="position: relative; display: inline-block;"><img src=' + thumburl + ' style="display: block; height: auto;"/><svg style="position: absolute; top: 0; left: 0; opacity: .4; width: 100px;" viewBox="0 0 26 26">' + 
+        imageobj['html'] = ReactDOMServer.renderToStaticMarkup(<VideoHtml thumburl={thumburl} history={this.props.history} basename={this.props.basename} album={this.props.match.params.album} image={imageobj['data-video-src']}/>)
+        /*
+        imageobj['html'] = '<div style="padding-top: 44px; height: 100%; text-align: center">' +
+          //'<a href="' + imageobj['data-video-src'] + '" onClick="var n = document.createElement("div"); (document.querySelector(".pswp__scroll-wrap")).after(n)">' + 
+          '<a href="#" onClick="event.preventDefault(); var n = document.createElement(\'div\'); (document.querySelector(\'.pswp__scroll-wrap\')).after(n)">' + 
+          //<Breadcrumb.Item onClick={ e => this.props.history.push("/list/" + this.props.match.params.album)}>Collections</Breadcrumb.Item>
+          '<div style="position: relative; display: inline-block; width: 100%; height: 100%; padding-bottom: 88px;">' + 
+          '<div style="position: relative; display: block; height: 100%">' +
+          '<img src=' + thumburl + ' style="display: block; height: 100%; margin: 0 auto;"/>' +
+          '<svg style="position: absolute; top: 0; left: 50%; transform: translate(-50%); opacity: .4; height: 100%;" viewBox="0 0 26 26">' + 
           '' + 
           '<polygon points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>' + 
           '<path d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>' + 
-          '</svg></div>' + 
+          '</svg></div></div>' + 
           '</a></div>';
+        */
       }
       imagelist.push(imageobj);
     }

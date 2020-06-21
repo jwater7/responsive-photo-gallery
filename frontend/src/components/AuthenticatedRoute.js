@@ -7,7 +7,7 @@ const AuthenticatedRoute = ({ component: Component, authtoken, ...rest }) => (
     return authtoken ?
     //(React.createElement(component, { ...routeProps, authtoken, ...rest })) :
     (<Component {...routeProps} authtoken={authtoken} {...rest} />) :
-    (<Redirect to="/login" />);
+    authtoken === null ? <React.Fragment/> : (<Redirect to="/login" />);
   }} />
 );
 
