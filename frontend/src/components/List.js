@@ -9,6 +9,7 @@ import API from '../api';
 //import Gallery from 'react-photo-gallery';
 //import ImageList from './ImageList';
 import { PhotoSwipeGallery } from 'react-photoswipe-2';
+import { getURLParams } from '../utils';
 
 class ImageWithStatusText extends React.Component {
   constructor(props) {
@@ -60,7 +61,7 @@ const getThumbnailContent = (item) => {
 
 const VideoHtml = (props) => (
   <div style={{paddingTop: '44px', height: '100%', textAlign: 'center'}}>
-    <a href={props.basename + "singleview/" + props.album + "?imageurl=" + encodeURIComponent(props.image) + "&thumburl=" + encodeURIComponent(props.thumburl)}>
+    <a href={props.basename + "singleview/" + props.album + "?imageurl=" + encodeURIComponent(props.image) + "&thumburl=" + encodeURIComponent(props.thumburl) + "&collection=" + encodeURIComponent(props.collection) + "&imageIndex=" + encodeURIComponent(props.imageIndex)}>
       <div style={{position: 'relative', display: 'inline-block', width: '100%', height: '100%', paddingBottom: '88px'}}>
         <div style={{position: 'relative', display: 'block', height: '100%'}}>
           <img src={props.thumburl} style={{display: 'block', height: '100%', margin: '0 auto'}} alt="thumbnail"/>
@@ -78,11 +79,23 @@ class List extends React.Component {
 
   thumbDim = '100x100';
 
+  state = {
+    isOpen: null,
+  }
+
+  handleClose = () => {
+    this.setState({ isOpen: null });
+  }
+
   componentDidMount() {
 
     if (!(this.props.match.params.album in this.props.list) || !(this.props.match.params.album in this.props.collectionMap)) {
       this.props.loadList(this.props.match.params.album, this.props.authtoken);
     }
+
+    const { openAtCollection } = getURLParams(this.props.location.search, {openAtCollection: null});
+    this.setState({ isOpen: openAtCollection });
+    
 
     //if (!(this.props.match.params.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.match.params.album])) {
     //  this.props.addThumbs(this.props.match.params.album, this.thumbDim, this.props.authtoken);
@@ -90,7 +103,7 @@ class List extends React.Component {
 
   }
 
-  photos = (collectionItems = undefined) => {
+  photos = (collection, collectionItems = undefined) => {
 
     const [width, height] = this.thumbDim.split('x');
 
@@ -149,23 +162,7 @@ class List extends React.Component {
         };
         imageobj['data-video-src'] = API.videourl(videoparams);
         delete imageobj['src'];
-        // TODO this is messy and duplicated from above
-        imageobj['html'] = ReactDOMServer.renderToStaticMarkup(<VideoHtml thumburl={thumburl} history={this.props.history} basename={this.props.basename} album={this.props.match.params.album} image={imageobj['data-video-src']}/>)
-        /*
-        imageobj['html'] = '<div style="padding-top: 44px; height: 100%; text-align: center">' +
-          //'<a href="' + imageobj['data-video-src'] + '" onClick="var n = document.createElement("div"); (document.querySelector(".pswp__scroll-wrap")).after(n)">' + 
-          '<a href="#" onClick="event.preventDefault(); var n = document.createElement(\'div\'); (document.querySelector(\'.pswp__scroll-wrap\')).after(n)">' + 
-          //<Breadcrumb.Item onClick={ e => this.props.history.push("/list/" + this.props.match.params.album)}>Collections</Breadcrumb.Item>
-          '<div style="position: relative; display: inline-block; width: 100%; height: 100%; padding-bottom: 88px;">' + 
-          '<div style="position: relative; display: block; height: 100%">' +
-          '<img src=' + thumburl + ' style="display: block; height: 100%; margin: 0 auto;"/>' +
-          '<svg style="position: absolute; top: 0; left: 50%; transform: translate(-50%); opacity: .4; height: 100%;" viewBox="0 0 26 26">' + 
-          '' + 
-          '<polygon points="9.33 6.69 9.33 19.39 19.3 13.04 9.33 6.69"/>' + 
-          '<path d="M26,13A13,13,0,1,1,13,0,13,13,0,0,1,26,13ZM13,2.18A10.89,10.89,0,1,0,23.84,13.06,10.89,10.89,0,0,0,13,2.18Z"/>' + 
-          '</svg></div></div>' + 
-          '</a></div>';
-        */
+        imageobj['html'] = ReactDOMServer.renderToStaticMarkup(<VideoHtml thumburl={thumburl} basename={this.props.basename} album={this.props.match.params.album} image={imageobj['data-video-src']} collection={collection} imageIndex={imagelist.length} />)
       }
       imagelist.push(imageobj);
     }
@@ -182,8 +179,12 @@ class List extends React.Component {
     return this.props.collectionMap[album];
   }
 
+
   render() {
+    const { isOpen } = this.state;
+    const { startIndex } = getURLParams(this.props.location.search, {startIndex: 0});
     const collectionMap = this.getCollectionMapForAlbum(this.props.match.params.album);
+    const collectionKeys = Object.keys(collectionMap).sort();
     return (
       <div>
         <Breadcrumb>
@@ -193,7 +194,7 @@ class List extends React.Component {
         <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}</h4>
         <Row>
           <Col xs={12}>
-            {Object.keys(collectionMap).sort().map((collectionKey) => (
+            {collectionKeys.map((collectionKey) => (
               <div key={collectionKey}>
                 <Link key={collectionKey} to={{
                   pathname: `/collection/${this.props.match.params.album}`,
@@ -204,7 +205,7 @@ class List extends React.Component {
                   {/*<ImageList photos={this.photos(collectionMap[collectionKey].items)} />*/}
                   {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
                 </Link>
-                <PhotoSwipeGallery items={this.photos(collectionMap[collectionKey].items)} options={{shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} thumbnailContent={getThumbnailContent} />
+                <PhotoSwipeGallery isOpen={isOpen === collectionKey} onClose={this.handleClose} items={this.photos(collectionKey, collectionMap[collectionKey].items)} options={{index: Number(startIndex), shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} thumbnailContent={getThumbnailContent} />
               </div>
             ))}
           </Col>

@@ -1,8 +1,10 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
+import qs from 'query-string';
+
 // Alternative to URLSearchParams for browsers that don't support it
-const getParams = query => {
+export const getParams = query => {
   if (!query) {
     return { };
   }
@@ -15,4 +17,21 @@ const getParams = query => {
       return params;
     }, { });
 };
+
+export const getURLParams = (locsearch, ps = {}) => {
+  // find the index
+  if (!locsearch) {
+    return {};
+  }
+
+  //const params = new URLSearchParams(props.location.search);
+  const params = qs.parse(locsearch);
+  return Object.keys(ps).reduce((acc,p) =>
+    ({
+      ...acc,
+      [p]: params[p] || ps[p],
+    }),
+  {}
+  )
+}
 
