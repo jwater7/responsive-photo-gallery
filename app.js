@@ -1,36 +1,36 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
-var express = require('express');
+const express = require('express')
 const createError = require('http-errors')
-var path = require('path');
-var favicon = require('serve-favicon');
-var logger = require('morgan');
-var cookieParser = require('cookie-parser');
-var bodyParser = require('body-parser');
-var swaggerUi = require('swagger-ui-express');
-var swaggerJSDoc = require('swagger-jsdoc');
+const path = require('path')
+//const favicon = require('serve-favicon')
+const logger = require('morgan')
+const cookieParser = require('cookie-parser')
+const bodyParser = require('body-parser')
+const swaggerUi = require('swagger-ui-express')
+const swaggerJSDoc = require('swagger-jsdoc')
 const passport = require('passport')
 const { Strategy: JwtCookieComboStrategy } = require('passport-jwt-cookiecombo')
 
-const jwtAuth = require('jwt-user-auth');
-const auth_path = process.env.AUTH_PATH || '/data/auth';
-var auth = new jwtAuth(auth_path);
+const jwtAuth = require('jwt-user-auth')
+const auth_path = process.env.AUTH_PATH || '/data/auth'
+const auth = new jwtAuth(auth_path)
 
-var pjson = require('./package.json');
+const pjson = require('./package.json')
 
-var api = require('./routes/api');
+const api = require('./routes/api')
 
-var app = express();
+const app = express()
 
 // view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'pug');
+app.set('views', path.join(__dirname, 'views'))
+app.set('view engine', 'pug')
 
-app.use(logger('dev'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser('TODO Needs a Secret'));
+app.use(logger('dev'))
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: false }))
+app.use(cookieParser('TODO Needs a Secret'))
 // TODO uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 //app.use(express.static(path.join(__dirname, 'public')));
@@ -52,13 +52,13 @@ passport.use(
 )
 
 // routes
-app.use('/api/v1/', api({passport, auth}));
+app.use('/api/v1/', api({ passport, auth }))
 
 // swagger
-var rootpath = process.env.SWAGGER_ROOT_PATH || '';
-var basepath = rootpath + '/api/v1/';
+const rootpath = process.env.SWAGGER_ROOT_PATH || ''
+const basepath = rootpath + '/api/v1/'
 
-var options = {
+const options = {
   swaggerDefinition: {
     swagger: '2.0',
     info: {
@@ -75,34 +75,40 @@ var options = {
     },
   },
   apis: ['./routes/api*'], // Path to the API docs
-};
-var swaggerSpec = swaggerJSDoc(options);
+}
+const swaggerSpec = swaggerJSDoc(options)
 
-app.get('/api/v1/swagger.json', function(req, res) {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpec);
-  res.end();
-});
-app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec), function(req, res, next) {
-  res.end();
-});
+app.get('/api/v1/swagger.json', function (req, res) {
+  res.setHeader('Content-Type', 'application/json')
+  res.send(swaggerSpec)
+  res.end()
+})
+app.use('/api-docs/', swaggerUi.serve, swaggerUi.setup(swaggerSpec), function (
+  req,
+  res,
+  next
+) {
+  res.end()
+})
 
 // Any other paths, assume they are the frontend
-app.use(express.static(path.join(__dirname, 'frontend/build')));
-app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'frontend/build/index.html')) });
+app.use(express.static(path.join(__dirname, 'frontend/build')))
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend/build/index.html'))
+})
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  var err = new Error('Not Found');
-  err.status = 404;
-  next(err);
-});
+app.use(function (req, res, next) {
+  const err = new Error('Not Found')
+  err.status = 404
+  next(err)
+})
 
 // error handler
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
   // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  res.locals.message = err.message
+  res.locals.error = req.app.get('env') === 'development' ? err : {}
 
   let sanErr = err
   if (err.name === 'AuthenticationError') {
@@ -112,13 +118,13 @@ app.use(function(err, req, res, next) {
   }
 
   // render the error page
-  res.status(sanErr.status || 500);
+  res.status(sanErr.status || 500)
   // TODO handle errors with more info
   res.json({
     error: {
       status: sanErr.status || 500,
     },
   })
-});
+})
 
-module.exports = app;
+module.exports = app

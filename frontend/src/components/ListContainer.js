@@ -29,8 +29,8 @@ const createCollectionObjectForListItem = (item) => {
 const loadCollectionMap = (album, list) => {
 
   //populate collectionMap
-  let filelist = Object.keys(list);
-  var collectionMap = {};
+  const filelist = Object.keys(list);
+  const collectionMap = {};
   for (let i = 0; i < filelist.length; i++) {
     let filename = filelist[i];
     let collectionItem = createCollectionObjectForListItem(list[filename]);
@@ -44,6 +44,20 @@ const loadCollectionMap = (album, list) => {
     }
     // add to the list
     collectionMap[collectionItem.collection].items.push(filename);
+    if (list[filename].tags.includes('favorite')) {
+      if (!collectionMap.favorites) {
+        collectionMap.favorites = {
+          filter: {
+            tags: ['favorite']
+          },
+          collection: 'favorites',
+          description: 'Favorites',
+          items: []
+        };
+      }
+
+      collectionMap.favorites.items.push(filename);
+    }
   }
 
   // {collection: {description, filter, items: ['filename', ...]}, ...}

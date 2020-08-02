@@ -11,7 +11,7 @@ import Gallery from 'react-photo-gallery';
 //import ImageList from './ImageList';
 //import { PhotoSwipeGallery } from 'react-photoswipe';
 
-const passDateFilter = (filter, mtime) => {
+const passFilters = (filter, {mtime, tags}) => {
   if (filter.year) {
     if (!mtime) {
       return false;
@@ -27,6 +27,14 @@ const passDateFilter = (filter, mtime) => {
     }
     let mdate = new Date(mtime);
     if (mdate.getMonth().toString() !== filter.month) {
+      return false;
+    }
+  }
+  if (Array.isArray(filter.tags) && filter.tags.length) {
+    if (!tags) {
+      return false;
+    }
+    if (!tags.some(tag => filter.tags.includes(tag))) {
       return false;
     }
   }
@@ -46,25 +54,26 @@ class Collection extends React.Component {
   getURLParams = () => {
     // find the filter
     if (!this.props.location.search) {
-      return undefined;
+      return {};
     }
 
     //const params = new URLSearchParams(this.props.location.search);
     const params = qs.parse(this.props.location.search);
+
     const json_filter = params['filter'];
     //const json_filter = params.get('filter');
-    if (!json_filter) {
-      return undefined;
+    let filter
+    if (json_filter) {
+      filter = JSON.parse(json_filter);
     }
-    const filter = JSON.parse(json_filter);
 
     const json_description = params['description'];
     //const json_description = params.get('description');
-    if (!json_description) {
-      return undefined;
+    let description
+    if (json_description) {
+      description = JSON.parse(json_description);
     }
 
-    const description = JSON.parse(json_description);
 
     return {
       filter,
@@ -92,8 +101,9 @@ class Collection extends React.Component {
       let filename = filelist[i];
 
       // Apply Date Filters if date is present
-      let mtime = this.props.list[alb][filename].modifyDate;
-      if (!passDateFilter(filter, mtime)) {
+      const mtime = this.props.list[alb][filename].modifyDate;
+      const tags = this.props.list[alb][filename].tags;
+      if (!passFilters(filter, {mtime, tags})) {
         continue;
       }
 

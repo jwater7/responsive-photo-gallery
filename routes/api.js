@@ -1,23 +1,37 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
-var express = require('express');
+var express = require('express')
 
-const imageHandler = require('../handlers/image-handler');
-const image_path = process.env.IMAGE_PATH || '/images';
-const thumb_path = process.env.THUMB_PATH || '/data/thumbs';
-var handler = new imageHandler(image_path, thumb_path);
+const imageHandler = require('../handlers/image-handler')
+const image_path = process.env.IMAGE_PATH || '/images'
+const thumb_path = process.env.THUMB_PATH || '/data/thumbs'
+const tags_path = process.env.TAGS_PATH || '/data/tags'
+var handler = new imageHandler(image_path, thumb_path, tags_path)
 
-const debug = require('debug')('responsive-photo-gallery:server');
+const debug = require('debug')('responsive-photo-gallery:server')
+const debugErr = require('debug')('responsive-photo-gallery:server:error')
 
-module.exports = ({passport, auth}) => {
+const responseHandler = (res) => (args) => {
+  if (!args || args.error || !args.result) {
+    res.status(args && args.error && args.error.code ? args.error.code : 500)
+  } else {
+    res.status(200)
+  }
+  res.json(args)
+  res.end()
+}
 
-  var router = express.Router();
+module.exports = ({ passport, auth }) => {
+  var router = express.Router()
 
-  const required = process.env.NO_AUTHENTICATION === 'yes' ? [] : passport.authenticate('jwt-cookiecombo', {
-    session: false,
-    failWithError: true,
-  })
+  const required =
+    process.env.NO_AUTHENTICATION === 'yes'
+      ? []
+      : passport.authenticate('jwt-cookiecombo', {
+          session: false,
+          failWithError: true,
+        })
 
   const getCommonCookieOptions = ({
     cookie_domain,
@@ -46,16 +60,19 @@ module.exports = ({passport, auth}) => {
 
   // Enable CORS routes for debug only
   if (debug.enabled) {
-    router.use(function(req, res, next) {
+    router.use(function (req, res, next) {
       //res.header("Access-Control-Allow-Origin", "*");
-      res.header("Access-Control-Allow-Origin", "http://localhost:3000");
-      res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-API-Key");
-      res.header("Access-Control-Allow-Credentials", "true");
-      next();
-    });
-    router.options(function(req, res, next) {
-      res.status(200).end();
-    });
+      res.header('Access-Control-Allow-Origin', 'http://localhost:3000')
+      res.header(
+        'Access-Control-Allow-Headers',
+        'Origin, X-Requested-With, Content-Type, Accept, X-API-Key'
+      )
+      res.header('Access-Control-Allow-Credentials', 'true')
+      next()
+    })
+    router.options(function (req, res, next) {
+      res.status(200).end()
+    })
   }
 
   // Authenticate if data is available
@@ -83,14 +100,14 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.all('/ping', required, function(req, res, next) {
+  router.all('/ping', required, function (req, res, next) {
     // TODO this uses a cookie now
-    var token = req.body.token || req.query.token || req.headers['x-api-key'];
+    var token = req.body.token || req.query.token || req.headers['x-api-key']
     res.status(200).json({
       result: token,
-    });
-    res.end();
-  });
+    })
+    res.end()
+  })
 
   /**
    * @swagger
@@ -113,7 +130,7 @@ module.exports = ({passport, auth}) => {
    *             cookie_path:
    *               type: string
    *               example: /
-   *         
+   *
    *     responses:
    *       200:
    *         description: Returns auth token
@@ -124,8 +141,7 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.post('/logout', required, function(req, res, next) {
-
+  router.post('/logout', required, function (req, res, next) {
     const jwt = req.user.jwt || req.body.jwt
     const cookieOptions = getCommonCookieOptions({
       cookie_domain: req.body.cookie_domain,
@@ -135,8 +151,7 @@ module.exports = ({passport, auth}) => {
     })
     res.clearCookie('jwt', cookieOptions)
     res.json({ result: jwt })
-
-  });
+  })
 
   /**
    * @swagger
@@ -172,22 +187,17 @@ module.exports = ({passport, auth}) => {
    *       401:
    *         description: Authentication Failure
    */
-  router.post('/login', function(req, res, next) {
-
+  router.post('/login', function (req, res, next) {
     const expiresIn =
       (process.env.API_FORCE_JWT_EXPIRE_SEC
         ? Number(process.env.API_FORCE_JWT_EXPIRE_SEC)
         : undefined) ||
-      (req.body.jwt_expire_sec
-        ? Number(req.body.jwt_expire_sec)
-        : undefined) ||
-      (req.body.cookie_max_age_sec
-        ? Number(req.body.cookie_max_age_sec)
-        : '1d') //default to about the life of a cookie
+      (req.body.jwt_expire_sec ? Number(req.body.jwt_expire_sec) : undefined) ||
+      (req.body.cookie_max_age_sec ? Number(req.body.cookie_max_age_sec) : '1d') //default to about the life of a cookie
 
     var token = auth.login(req.body.username, req.body.password, {
       ...(expiresIn && { expiresIn }),
-    });
+    })
     if (token) {
       const cookieOptions = getCommonCookieOptions({
         cookie_domain: req.body.cookie_domain,
@@ -203,17 +213,17 @@ module.exports = ({passport, auth}) => {
 
       res.status(200).json({
         result: token,
-      });
+      })
     } else {
       res.status(403).json({
         error: {
           code: 403,
           message: 'Incorrect',
-        }
-      });
+        },
+      })
     }
-    res.end();
-  });
+    res.end()
+  })
 
   /**
    * @swagger
@@ -235,19 +245,9 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.get('/albums', required, function(req, res, next) {
-
-    function cb(args) {
-      if (args.error || !args.result) {
-        res.status(500);
-      } else {
-        res.status(200);
-      }
-      res.json(args);
-      res.end();
-    }
-    handler.albums(cb);
-  });
+  router.get('/albums', required, function (req, res, next) {
+    handler.albums(responseHandler(res))
+  })
 
   /**
    * @swagger
@@ -276,6 +276,11 @@ module.exports = ({passport, auth}) => {
    *         schema:
    *           type: boolean
    *           required: false
+   *       - name: withMetadata
+   *         in: query
+   *         description: an optional obj to include extra params (e.g. list of tags)
+   *         schema:
+   *           type: object
    *     responses:
    *       200:
    *         description: Returns JSON list
@@ -286,17 +291,15 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.get('/list', required, function(req, res, next) {
-    handler.list(req.query.album, req.query.num_results, req.query.distributed, function cb(args) {
-      if (args.error || !args.result) {
-        res.status(500);
-      } else {
-        res.status(200);
-      }
-      res.json(args);
-      res.end();
-    });
-  });
+  router.get('/list', required, function (req, res, next) {
+    handler.list(
+      req.query.album,
+      req.query.num_results,
+      req.query.distributed,
+      { withMetadata: req.query.withMetadata },
+      responseHandler(res)
+    )
+  })
 
   /**
    * @swagger
@@ -329,25 +332,70 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.get('/image', required, function(req, res, next) {
-
-    let album = req.query.album;
-    let image = req.query.image;
-    let thumb = req.query.thumb;
+  router.get('/image', required, function (req, res, next) {
+    let album = req.query.album
+    let image = req.query.image
+    let thumb = req.query.thumb
 
     handler.image(album, image, thumb, (err, image_buffer, content_type) => {
       if (err) {
-        res.status(500);
-        res.json(err);
-        res.end();
-        return;
+        res.status(500)
+        res.json(err)
+        res.end()
+        return
       }
-      res.set('Content-Type', content_type);
-      res.send(image_buffer);
-      res.end();
-    });
+      res.set('Content-Type', content_type)
+      res.send(image_buffer)
+      res.end()
+    })
+  })
 
-  });
+  /**
+   * @swagger
+   * /image-data:
+   *   patch:
+   *     description: Update image properties
+   *     produces:
+   *       - application/json
+   *     consumes:
+   *       - application/json
+   *     parameters:
+   *       - name: body
+   *         in: body
+   *         description: Image object
+   *         schema:
+   *           type: object
+   *           required:
+   *             - album
+   *             - image
+   *           properties:
+   *             album:
+   *               type: string
+   *             image:
+   *               type: string
+   *             tags:
+   *               type: array
+   *               items:
+   *                 type: string
+   *                 example: favorite
+   *     responses:
+   *       200:
+   *         description: Returns auth token
+   *       401:
+   *         description: Authentication Failure
+   */
+  router.patch('/image-data', required, async (req, res, next) => {
+    try {
+      responseHandler(res)(
+        await handler.updateImageData(req.body.album, req.body.image, {
+          tags: req.body.tags,
+        })
+      )
+    } catch (err) {
+      debugErr('Error: ', err)
+      responseHandler(res)()
+    }
+  })
 
   /**
    * @swagger
@@ -374,23 +422,21 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.get('/video', required, function(req, res, next) {
-
-    let album = req.query.album;
+  router.get('/video', required, function (req, res, next) {
+    let album = req.query.album
     //TODO probably rename to video or something instead of image
-    let image = req.query.image;
+    let image = req.query.image
 
     handler.video(album, image, (err, video_file) => {
       if (err) {
-        res.status(500);
-        res.json(err);
-        res.end();
-        return;
+        res.status(500)
+        res.json(err)
+        res.end()
+        return
       }
-      res.download(video_file);
-    });
-
-  });
+      res.download(video_file)
+    })
+  })
 
   /**
    * @swagger
@@ -441,18 +487,16 @@ module.exports = ({passport, auth}) => {
    *     security:
    *       - ApiKeyAuth: []
    */
-  router.get('/thumbnails', required, function(req, res, next) {
-    handler.thumbnails(req.query.album, req.query.thumb, req.query.image, req.query.num_results, req.query.distributed, function cb(args) {
-      if (args.error || !args.result) {
-        res.status(500);
-      } else {
-        res.status(200);
-      }
-      res.json(args);
-      res.end();
-    });
-  });
+  router.get('/thumbnails', required, function (req, res, next) {
+    handler.thumbnails(
+      req.query.album,
+      req.query.thumb,
+      req.query.image,
+      req.query.num_results,
+      req.query.distributed,
+      responseHandler(res)
+    )
+  })
 
-  return router;
+  return router
 }
-

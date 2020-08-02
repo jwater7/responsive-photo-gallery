@@ -184,7 +184,7 @@ class List extends React.Component {
     const { isOpen } = this.state;
     const { startIndex } = getURLParams(this.props.location.search, {startIndex: 0});
     const collectionMap = this.getCollectionMapForAlbum(this.props.match.params.album);
-    const collectionKeys = Object.keys(collectionMap).sort();
+    const collectionKeys = [...(Object.keys(collectionMap).includes('favorites') ? ['favorites'] : []), ...(Object.keys(collectionMap).sort().filter(it => it !== 'favorites'))]
     return (
       <div>
         <Breadcrumb>
@@ -198,7 +198,7 @@ class List extends React.Component {
               <div key={collectionKey}>
                 <Link key={collectionKey} to={{
                   pathname: `/collection/${this.props.match.params.album}`,
-                  search: '?filter=' + collectionMap[collectionKey].filter + '&description=' + JSON.stringify(collectionMap[collectionKey].description),
+                  search: '?filter=' + JSON.stringify(collectionMap[collectionKey].filter) + '&description=' + JSON.stringify(collectionMap[collectionKey].description),
                   /*search: '?filter=' + JSON.stringify({year: '2017', month: '3'}), */
                 }}>
                   <h5 style={{overflow: 'hidden',}}>{collectionMap[collectionKey].description}</h5>

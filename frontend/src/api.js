@@ -108,7 +108,7 @@ const API = {
     //})
     const max_list_items = opts.max_list_items ? opts.max_list_items : '';
     // TODO fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true')
-    fetch(api_prefix + '/list?album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true')
+    fetch(api_prefix + '/list?album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true&withMetadata=' + JSON.stringify({ tags: ['favorite'] }))
       .then(res => res.json())
       .then(jsonData => {
         if (jsonData.error) {
