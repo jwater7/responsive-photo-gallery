@@ -5,23 +5,25 @@ import React from 'react';
 import API from '../api';
 
 class Logout extends React.Component {
-
   logout = () => {
-    API.logout((good) => {
-      if (!good) {
-        //TODO
-        console.log('Failed to logout');
-        // Clear it anyway
+    API.logout(
+      (good) => {
+        if (!good) {
+          //TODO
+          console.log('Failed to logout');
+          // Clear it anyway
+          this.props.updateAuthCB(false);
+          return;
+        }
         this.props.updateAuthCB(false);
-        return;
+      },
+      {
+        token: this.props.authtoken,
       }
-      this.props.updateAuthCB(false);
-    }, {
-      token: this.props.authtoken,
-    });
+    );
     // TODO fix api - Clear it anyway when we get a 401
     this.props.updateAuthCB(false);
-  }
+  };
 
   componentDidMount() {
     this.logout();
@@ -34,7 +36,6 @@ class Logout extends React.Component {
       </div>
     );
   }
-};
+}
 
 export default Logout;
-

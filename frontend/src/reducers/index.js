@@ -8,7 +8,7 @@ import {
   UPDATE_ALBUMS,
   ADD_LIST,
   ADD_COLLECTION_MAP,
-} from '../actions'
+} from '../actions';
 
 const thumbs = (state = {}, action) => {
   switch (action.type) {
@@ -18,11 +18,11 @@ const thumbs = (state = {}, action) => {
       let newAlbum = Object.assign({}, state[action.album]);
       newThumbs[action.album] = newAlbum;
       newThumbs[action.album][action.dimension] = action.thumbs;
-      return (newThumbs);
+      return newThumbs;
     default:
       return state;
   }
-}
+};
 
 const albums = (state = {}, action) => {
   switch (action.type) {
@@ -31,29 +31,29 @@ const albums = (state = {}, action) => {
     default:
       return state;
   }
-}
+};
 
 const list = (state = {}, action) => {
   switch (action.type) {
     case ADD_LIST:
       let newList = Object.assign({}, state);
       newList[action.album] = action.list;
-      return (newList);
+      return newList;
     default:
       return state;
   }
-}
+};
 
 const collectionMap = (state = {}, action) => {
   switch (action.type) {
     case ADD_COLLECTION_MAP:
       let newList = Object.assign({}, state);
       newList[action.album] = action.collectionMap;
-      return (newList);
+      return newList;
     default:
       return state;
   }
-}
+};
 
 const reducers = combineReducers({
   thumbs,
@@ -63,4 +63,3 @@ const reducers = combineReducers({
 });
 
 export default reducers;
-

@@ -9,27 +9,28 @@ import { addList } from '../actions';
 const mapStateToProps = (state) => {
   return {
     list: state.list,
-  }
-}
+  };
+};
 
 const mapDispatchToProps = (dispatch) => {
   return {
     loadList: (album, authtoken) => {
-
-      API.list((list) => {
-        dispatch(addList(album, list));
-      }, {
-        token: authtoken,
-        album: album,
-      });
+      API.list(
+        (list) => {
+          dispatch(addList(album, list));
+        },
+        {
+          token: authtoken,
+          album: album,
+        }
+      );
     },
-  }
-}
+  };
+};
 
 const CollectionContainer = connect(
   mapStateToProps,
-  mapDispatchToProps,
+  mapDispatchToProps
 )(Collection);
 
 export default CollectionContainer;
-

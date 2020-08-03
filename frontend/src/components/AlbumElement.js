@@ -6,39 +6,49 @@ import React from 'react';
 import ImageList from './ImageList';
 
 class AlbumElement extends React.Component {
-
   thumbDim = '40x40';
 
   componentDidMount() {
-
-    if (!(this.props.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.album])) {
-      this.props.addThumbs(this.props.album, this.thumbDim, this.props.authtoken);
+    if (
+      !(this.props.album in this.props.thumbs) ||
+      !(this.thumbDim in this.props.thumbs[this.props.album])
+    ) {
+      this.props.addThumbs(
+        this.props.album,
+        this.thumbDim,
+        this.props.authtoken
+      );
     }
-
   }
 
   photos = () => {
-
     const [width, height] = this.thumbDim.split('x');
-    if (!(this.props.album in this.props.thumbs) || !(this.thumbDim in this.props.thumbs[this.props.album])) {
+    if (
+      !(this.props.album in this.props.thumbs) ||
+      !(this.thumbDim in this.props.thumbs[this.props.album])
+    ) {
       return [];
     }
     let imagelist = [];
-    let thumbs = Object.keys(this.props.thumbs[this.props.album][this.thumbDim]);
+    let thumbs = Object.keys(
+      this.props.thumbs[this.props.album][this.thumbDim]
+    );
     for (let i = 0; i < thumbs.length; i++) {
       let thumbkey = thumbs[i];
-      let thumburl = this.props.thumbs[this.props.album][this.thumbDim][thumbkey].base64tag;
-      if(!thumburl) {
+      let thumburl = this.props.thumbs[this.props.album][this.thumbDim][
+        thumbkey
+      ].base64tag;
+      if (!thumburl) {
         continue;
       }
-      let imageobj = {key: thumbkey, src: thumburl, width, height};
+      let imageobj = { key: thumbkey, src: thumburl, width, height };
       imagelist.push(imageobj);
     }
     if (!imagelist) {
       return [];
     }
-    return(imagelist);
-  }
+    return imagelist;
+  };
 
   render() {
     return (
@@ -51,4 +61,3 @@ class AlbumElement extends React.Component {
 }
 
 export default AlbumElement;
-

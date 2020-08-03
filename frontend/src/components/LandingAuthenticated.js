@@ -11,4 +11,3 @@ const LandingAuthenticated = (props) => (
 );
 
 export default LandingAuthenticated;
-

@@ -16,10 +16,6 @@ class Skeleton extends React.Component {
 }
 */
 
-const Skeleton = (props) => (
-  <div>
-  </div>
-);
+const Skeleton = (props) => <div></div>;
 
 export default Skeleton;
-

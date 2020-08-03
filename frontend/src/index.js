@@ -15,11 +15,11 @@ import 'react-photoswipe-2/lib/photoswipe.css';
 
 let store = createStore(reducers);
 
-ReactDOM.render((
+ReactDOM.render(
   <Provider store={store}>
     <App />
-  </Provider>
-), document.getElementById('root'))
+  </Provider>,
+  document.getElementById('root')
+);
 // TODO (see above)
 //registerServiceWorker();
-

@@ -12,11 +12,13 @@ const renderMergedProps = (component, ...rest) => {
 */
 
 const PropsRoute = ({ component: Component, ...rest }) => (
-  <Route {...rest} render={(routeProps) => (
-    <Component {...routeProps} {...rest} />
-    //renderMergedProps(component, routeProps, rest);
-  )} />
+  <Route
+    {...rest}
+    render={(routeProps) => (
+      <Component {...routeProps} {...rest} />
+      //renderMergedProps(component, routeProps, rest);
+    )}
+  />
 );
 
 export default PropsRoute;
-

@@ -8,28 +8,27 @@ import SingleView from './SingleView';
 
 const mapStateToProps = (state) => {
   return {
-//    list: state.list,
-  }
-}
+    //    list: state.list,
+  };
+};
 
 const mapDispatchToProps = (dispatch) => {
   return {
-//    loadList: (album, authtoken) => {
-//
-//      API.list((list) => {
-//        dispatch(addList(album, list));
-//      }, {
-//        token: authtoken,
-//        album: album,
-//      });
-//    },
-  }
-}
+    //    loadList: (album, authtoken) => {
+    //
+    //      API.list((list) => {
+    //        dispatch(addList(album, list));
+    //      }, {
+    //        token: authtoken,
+    //        album: album,
+    //      });
+    //    },
+  };
+};
 
 const SingleViewContainer = connect(
   mapStateToProps,
-  mapDispatchToProps,
+  mapDispatchToProps
 )(SingleView);
 
 export default SingleViewContainer;
-

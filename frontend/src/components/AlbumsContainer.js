@@ -9,26 +9,24 @@ import { updateAlbums } from '../actions';
 const mapStateToProps = (state) => {
   return {
     albums: state.albums,
-  }
-}
+  };
+};
 
 const mapDispatchToProps = (dispatch) => {
   return {
     loadAlbums: (authtoken) => {
+      API.albums(
+        (albums) => {
+          dispatch(updateAlbums(albums));
+        },
+        {
+          token: authtoken,
+        }
+      );
+    },
+  };
+};
 
-      API.albums((albums) => {
-        dispatch(updateAlbums(albums));
-      }, {
-        token: authtoken,
-      });
-    }
-  }
-}
-
-const AlbumsContainer = connect(
-  mapStateToProps,
-  mapDispatchToProps,
-)(Albums);
+const AlbumsContainer = connect(mapStateToProps, mapDispatchToProps)(Albums);
 
 export default AlbumsContainer;
-

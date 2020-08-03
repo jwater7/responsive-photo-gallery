@@ -20,12 +20,41 @@ import SingleViewContainer from './SingleViewContainer';
 const AppMain = (props) => (
   <Grid>
     <Switch>
-      <PropsRoute exact name="landing" path="/" component={Landing} {...props} />
-      <AuthenticatedRoute path="/singleview/:album" component={SingleViewContainer} action={'view'} {...props} />
-      <AuthenticatedRoute path="/edit/:album" component={SingleViewContainer} action={'edit'} {...props} />
-      <AuthenticatedRoute path="/list/:album" component={ListContainer} {...props} />
-      <AuthenticatedRoute path="/collection/:album" component={CollectionContainer} {...props} />
-      <AuthenticatedRoute exact path="/albums" component={AlbumsContainer} {...props} />
+      <PropsRoute
+        exact
+        name="landing"
+        path="/"
+        component={Landing}
+        {...props}
+      />
+      <AuthenticatedRoute
+        path="/singleview/:album"
+        component={SingleViewContainer}
+        action={'view'}
+        {...props}
+      />
+      <AuthenticatedRoute
+        path="/edit/:album"
+        component={SingleViewContainer}
+        action={'edit'}
+        {...props}
+      />
+      <AuthenticatedRoute
+        path="/list/:album"
+        component={ListContainer}
+        {...props}
+      />
+      <AuthenticatedRoute
+        path="/collection/:album"
+        component={CollectionContainer}
+        {...props}
+      />
+      <AuthenticatedRoute
+        exact
+        path="/albums"
+        component={AlbumsContainer}
+        {...props}
+      />
       <PublicOnlyRoute path="/login" component={Login} {...props} />
       <AuthenticatedRoute path="/logout" component={Logout} {...props} />
       <PropsRoute component={NotFound} {...props} />
@@ -34,4 +63,3 @@ const AppMain = (props) => (
 );
 
 export default AppMain;
-

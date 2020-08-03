@@ -8,7 +8,7 @@ import LandingPublic from './LandingPublic';
 const Start = (props) => (
   <div>
     {props.authtoken ? (
-      <LandingAuthenticated {...props}/>
+      <LandingAuthenticated {...props} />
     ) : (
       <LandingPublic {...props} />
     )}
@@ -16,4 +16,3 @@ const Start = (props) => (
 );
 
 export default Start;
-

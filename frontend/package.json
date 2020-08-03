@@ -2,6 +2,20 @@
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "prettier": "prettier --write \"**/*.+(js|jsx|json)\"",
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --env=jsdom",
+    "eject": "react-scripts eject",
+    "debug": "REACT_APP_API_PREFIX=http://localhost:8000/ npm run start"
+  },
+  "prettier": {
+    "trailingComma": "es5",
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true
+  },
   "dependencies": {
     "react": "^16.0.0",
     "react-bootstrap": "^0.31.5",
@@ -15,15 +29,7 @@
     "redux": "^3.7.2",
     "universal-cookie": "^2.1.0"
   },
-  "scripts": {
-    "eslint": "eslint .",
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject",
-    "debug": "REACT_APP_API_PREFIX=http://localhost:8000/ npm run start"
-  },
   "devDependencies": {
-    "eslint": "^7.6.0"
+    "prettier": "^2.0.5"
   }
 }

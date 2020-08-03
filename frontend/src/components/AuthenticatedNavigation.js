@@ -11,4 +11,3 @@ const AuthenticatedNavigation = () => (
 );
 
 export default AuthenticatedNavigation;
-

@@ -9,7 +9,7 @@ import { addList, addThumbs, addCollectionMap } from '../actions';
 const createCollectionObjectForListItem = (item) => {
   let mtime = item.modifyDate;
   if (!mtime) {
-    return {collection: 'UNKNOWN', filter: ''};
+    return { collection: 'UNKNOWN', filter: '' };
   }
   let mdate = new Date(mtime);
   let month = mdate.getMonth();
@@ -19,15 +19,14 @@ const createCollectionObjectForListItem = (item) => {
   let collection = year + '.' + ('0' + (month + 1)).slice(-2);
   var obj = {
     collection,
-    filter: JSON.stringify({month: monthstr, year: yearstr}),
+    filter: JSON.stringify({ month: monthstr, year: yearstr }),
     month,
     year,
-  }
+  };
   return obj;
-}
+};
 
 const loadCollectionMap = (album, list) => {
-
   //populate collectionMap
   const filelist = Object.keys(list);
   const collectionMap = {};
@@ -38,7 +37,7 @@ const loadCollectionMap = (album, list) => {
     if (!collectionMap[collectionItem.collection]) {
       collectionMap[collectionItem.collection] = {
         filter: collectionItem.filter,
-        description: (collectionItem.month + 1) + '/' + collectionItem.year,
+        description: collectionItem.month + 1 + '/' + collectionItem.year,
         items: [],
       };
     }
@@ -48,11 +47,11 @@ const loadCollectionMap = (album, list) => {
       if (!collectionMap.favorites) {
         collectionMap.favorites = {
           filter: {
-            tags: ['favorite']
+            tags: ['favorite'],
           },
           collection: 'favorites',
           description: 'Favorites',
-          items: []
+          items: [],
         };
       }
 
@@ -62,47 +61,46 @@ const loadCollectionMap = (album, list) => {
 
   // {collection: {description, filter, items: ['filename', ...]}, ...}
   return collectionMap;
-
-}
+};
 
 const mapStateToProps = (state) => {
   return {
     thumbs: state.thumbs,
     list: state.list,
     collectionMap: state.collectionMap,
-  }
-}
+  };
+};
 
 const mapDispatchToProps = (dispatch) => {
   return {
     loadList: (album, authtoken) => {
-
-      API.list((list) => {
-        dispatch(addList(album, list));
-        var collectionMap = loadCollectionMap(album, list);
-        dispatch(addCollectionMap(album, collectionMap));
-      }, {
-        token: authtoken,
-        album: album,
-      });
+      API.list(
+        (list) => {
+          dispatch(addList(album, list));
+          var collectionMap = loadCollectionMap(album, list);
+          dispatch(addCollectionMap(album, collectionMap));
+        },
+        {
+          token: authtoken,
+          album: album,
+        }
+      );
     },
     addThumbs: (album, dim, authtoken) => {
-
-      API.thumbnails((thumbs) => {
-        dispatch(addThumbs(album, thumbs, dim));
-      }, {
-        token: authtoken,
-        album: album,
-        thumb: dim,
-      });
+      API.thumbnails(
+        (thumbs) => {
+          dispatch(addThumbs(album, thumbs, dim));
+        },
+        {
+          token: authtoken,
+          album: album,
+          thumb: dim,
+        }
+      );
     },
-  }
-}
+  };
+};
 
-const ListContainer = connect(
-  mapStateToProps,
-  mapDispatchToProps,
-)(List);
+const ListContainer = connect(mapStateToProps, mapDispatchToProps)(List);
 
 export default ListContainer;
-

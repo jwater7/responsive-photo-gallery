@@ -31,7 +31,6 @@ if (process.env.REACT_APP_BASENAME) {
 }
 
 class App extends React.Component {
-
   constructor(props) {
     super(props);
 
@@ -50,23 +49,34 @@ class App extends React.Component {
 
   updateAuth = (token) => {
     // TODO cookies.set('authtoken', token, {path: '/'});
-    this.setState({authtoken: token});
+    this.setState({ authtoken: token });
     //if (!token) {
     //  cookies.remove('authtoken');
     //}
-  }
+  };
 
   async componentDidMount() {
     // Check state of auth token expiration
-    this.updateAuth(await API.ping({token: this.state.authtoken}))
+    this.updateAuth(await API.ping({ token: this.state.authtoken }));
   }
 
   render() {
     return (
       <Router basename={basename}>
         <div className="App">
-          <AppNavigation pagetitle={title} authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} basename={basename} {...this.props} />
-          <AppMain authtoken={this.state.authtoken} updateAuthCB={this.updateAuth} basename={basename} {...this.props} />
+          <AppNavigation
+            pagetitle={title}
+            authtoken={this.state.authtoken}
+            updateAuthCB={this.updateAuth}
+            basename={basename}
+            {...this.props}
+          />
+          <AppMain
+            authtoken={this.state.authtoken}
+            updateAuthCB={this.updateAuth}
+            basename={basename}
+            {...this.props}
+          />
         </div>
       </Router>
     );
@@ -74,4 +84,3 @@ class App extends React.Component {
 }
 
 export default App;
-

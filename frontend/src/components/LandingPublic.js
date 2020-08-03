@@ -11,4 +11,3 @@ const LandingPublic = (props) => (
 );
 
 export default LandingPublic;
-

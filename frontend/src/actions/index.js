@@ -17,14 +17,14 @@ export const addThumbs = (album, thumbs, dimension) => {
     thumbs,
     dimension,
   };
-}
+};
 
 export const updateAlbums = (albums) => {
   return {
     type: UPDATE_ALBUMS,
     albums,
   };
-}
+};
 
 export const addList = (album, list) => {
   return {
@@ -32,7 +32,7 @@ export const addList = (album, list) => {
     album,
     list,
   };
-}
+};
 
 export const addCollectionMap = (album, collectionMap) => {
   return {
@@ -40,5 +40,4 @@ export const addCollectionMap = (album, collectionMap) => {
     album,
     collectionMap,
   };
-}
-
+};

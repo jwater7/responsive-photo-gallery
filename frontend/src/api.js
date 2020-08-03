@@ -25,79 +25,93 @@ if (process.env.REACT_APP_API_PREFIX) {
 api_prefix += 'api/v1';
 
 const API = {
-
   login: (_cb, opts) => {
     fetch(api_prefix + '/login', {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       //credentials: 'include',
       body: JSON.stringify({
         cookie_path: base_prefix,
-        cookie_max_age_sec: 60*60*24*365,
+        cookie_max_age_sec: 60 * 60 * 24 * 365,
         ...opts,
       }),
     })
-      .then(res => res.json())
-      .then(jsonData => {
+      .then((res) => res.json())
+      .then((jsonData) => {
         if (jsonData.error) {
-          console.log('LOGIN ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          console.log(
+            'LOGIN ERROR: (' +
+              jsonData.error.code +
+              ') ' +
+              jsonData.error.message
+          );
           return;
         }
         _cb(jsonData.result);
       })
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
+      .catch((error) => console.log('FETCH ERROR: ' + error.message));
   },
 
-  ping: (opts) => 
+  ping: (opts) =>
     // TODO fetch(api_prefix + '/ping?token=' + opts.token)
     fetch(api_prefix + '/ping')
-      .then(res => res.json())
-      .then(jsonData => (jsonData && !jsonData.error))
+      .then((res) => res.json())
+      .then((jsonData) => jsonData && !jsonData.error)
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message)),
+      .catch((error) => console.log('FETCH ERROR: ' + error.message)),
 
   logout: (_cb, opts) => {
     fetch(api_prefix + '/logout', {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         cookie_path: base_prefix,
-        cookie_max_age_sec: 60*60*24*365,
+        cookie_max_age_sec: 60 * 60 * 24 * 365,
         ...opts,
       }),
     })
-      .then(res => res.json())
-      .then(jsonData => {
+      .then((res) => res.json())
+      .then((jsonData) => {
         if (jsonData.error) {
-          console.log('LOGOUT ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          console.log(
+            'LOGOUT ERROR: (' +
+              jsonData.error.code +
+              ') ' +
+              jsonData.error.message
+          );
           return;
         }
         _cb(!!jsonData);
       })
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
+      .catch((error) => console.log('FETCH ERROR: ' + error.message));
   },
 
   albums: (_cb, opts) => {
     // TODO fetch(api_prefix + '/albums?token=' + opts.token)
     fetch(api_prefix + '/albums')
-      .then(res => res.json())
-      .then(jsonData => {
+      .then((res) => res.json())
+      .then((jsonData) => {
         if (jsonData.error) {
-          console.log('ALBUMS ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          console.log(
+            'ALBUMS ERROR: (' +
+              jsonData.error.code +
+              ') ' +
+              jsonData.error.message
+          );
           return;
         }
         _cb(jsonData.result);
       })
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
+      .catch((error) => console.log('FETCH ERROR: ' + error.message));
   },
 
   list: (_cb, opts) => {
@@ -108,33 +122,60 @@ const API = {
     //})
     const max_list_items = opts.max_list_items ? opts.max_list_items : '';
     // TODO fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true')
-    fetch(api_prefix + '/list?album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true&withMetadata=' + JSON.stringify({ tags: ['favorite'] }))
-      .then(res => res.json())
-      .then(jsonData => {
+    fetch(
+      api_prefix +
+        '/list?album=' +
+        opts.album +
+        '&num_results=' +
+        max_list_items +
+        '&distributed=true&withMetadata=' +
+        JSON.stringify({ tags: ['favorite'] })
+    )
+      .then((res) => res.json())
+      .then((jsonData) => {
         if (jsonData.error) {
-          console.log('LIST ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          console.log(
+            'LIST ERROR: (' +
+              jsonData.error.code +
+              ') ' +
+              jsonData.error.message
+          );
           return;
         }
         _cb(jsonData.result);
       })
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
+      .catch((error) => console.log('FETCH ERROR: ' + error.message));
   },
 
   thumbnails: (_cb, opts) => {
     const max_list_items = opts.max_list_items ? opts.max_list_items : '';
     // TODO fetch(api_prefix + '/thumbnails?token=' + opts.token + '&album=' + opts.album + '&thumb=' + opts.thumb + '&num_results=' + max_list_items + '&distributed=true')
-    fetch(api_prefix + '/thumbnails?album=' + opts.album + '&thumb=' + opts.thumb + '&num_results=' + max_list_items + '&distributed=true')
-      .then(res => res.json())
-      .then(jsonData => {
+    fetch(
+      api_prefix +
+        '/thumbnails?album=' +
+        opts.album +
+        '&thumb=' +
+        opts.thumb +
+        '&num_results=' +
+        max_list_items +
+        '&distributed=true'
+    )
+      .then((res) => res.json())
+      .then((jsonData) => {
         if (jsonData.error) {
-          console.log('THUMBNAILS ERROR: (' + jsonData.error.code + ') ' + jsonData.error.message);
+          console.log(
+            'THUMBNAILS ERROR: (' +
+              jsonData.error.code +
+              ') ' +
+              jsonData.error.message
+          );
           return;
         }
         _cb(jsonData.result);
       })
       // TODO debug log
-      .catch(error => console.log('FETCH ERROR: ' + error.message));
+      .catch((error) => console.log('FETCH ERROR: ' + error.message));
   },
 
   imageurl: (opts) => {
@@ -142,7 +183,8 @@ const API = {
       return false;
     }
     // TODO let iurl = api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
-    let iurl = api_prefix + '/image?album=' + opts.album + '&image=' + opts.image;
+    let iurl =
+      api_prefix + '/image?album=' + opts.album + '&image=' + opts.image;
     if (opts.thumb) {
       iurl += '&thumb=' + opts.thumb;
     }
@@ -155,7 +197,8 @@ const API = {
     }
     //TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
     // TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
-    let iurl = api_prefix + '/video?album=' + opts.album + '&image=' + opts.image;
+    let iurl =
+      api_prefix + '/video?album=' + opts.album + '&image=' + opts.image;
     if (opts.thumb) {
       iurl += '&thumb=' + opts.thumb;
     }
@@ -166,10 +209,8 @@ const API = {
     if (!opts.size) {
       return false;
     }
-    return(url + '&thumb=' + opts.size);
+    return url + '&thumb=' + opts.size;
   },
-
-}
+};
 
 export default API;
-

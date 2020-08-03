@@ -11,7 +11,7 @@ import Gallery from 'react-photo-gallery';
 //import ImageList from './ImageList';
 //import { PhotoSwipeGallery } from 'react-photoswipe';
 
-const passFilters = (filter, {mtime, tags}) => {
+const passFilters = (filter, { mtime, tags }) => {
   if (filter.year) {
     if (!mtime) {
       return false;
@@ -34,21 +34,18 @@ const passFilters = (filter, {mtime, tags}) => {
     if (!tags) {
       return false;
     }
-    if (!tags.some(tag => filter.tags.includes(tag))) {
+    if (!tags.some((tag) => filter.tags.includes(tag))) {
       return false;
     }
   }
   return true;
-}
+};
 
 class Collection extends React.Component {
-
   componentDidMount() {
-
     if (!(this.props.match.params.album in this.props.list)) {
       this.props.loadList(this.props.match.params.album, this.props.authtoken);
     }
-
   }
 
   getURLParams = () => {
@@ -62,31 +59,30 @@ class Collection extends React.Component {
 
     const json_filter = params['filter'];
     //const json_filter = params.get('filter');
-    let filter
+    let filter;
     if (json_filter) {
       filter = JSON.parse(json_filter);
     }
 
     const json_description = params['description'];
     //const json_description = params.get('description');
-    let description
+    let description;
     if (json_description) {
       description = JSON.parse(json_description);
     }
-
 
     return {
       filter,
       description,
     };
-  }
+  };
 
   photos = () => {
     if (!this.props.match.params.album) {
       return [];
     }
 
-    let {filter} = this.getURLParams();
+    let { filter } = this.getURLParams();
     if (!filter) {
       return [];
     }
@@ -103,7 +99,7 @@ class Collection extends React.Component {
       // Apply Date Filters if date is present
       const mtime = this.props.list[alb][filename].modifyDate;
       const tags = this.props.list[alb][filename].tags;
-      if (!passFilters(filter, {mtime, tags})) {
+      if (!passFilters(filter, { mtime, tags })) {
         continue;
       }
 
@@ -113,29 +109,37 @@ class Collection extends React.Component {
         image: filename,
       };
       // if it is a video then we want a thumbnail image url instead
-      if(this.props.list[alb][filename].format === 'video') {
-        imageparams['thumb'] = this.props.list[alb][filename].orientedWidth + 'x' + this.props.list[alb][filename].orientedHeight;
+      if (this.props.list[alb][filename].format === 'video') {
+        imageparams['thumb'] =
+          this.props.list[alb][filename].orientedWidth +
+          'x' +
+          this.props.list[alb][filename].orientedHeight;
       }
 
       let imageurl = API.imageurl(imageparams);
-      if(!imageurl) {
+      if (!imageurl) {
         continue;
       }
 
       //let imageobj = {key: filename, src: imageurl, w: this.props.list[alb][filename].orientedWidth, h: this.props.list[alb][filename].orientedHeight};
       //let imageobj = {key: filename, src: imageurl, width: '25%', height: '*'};
-      let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].orientedWidth, height: this.props.list[alb][filename].orientedHeight};
+      let imageobj = {
+        key: filename,
+        src: imageurl,
+        width: this.props.list[alb][filename].orientedWidth,
+        height: this.props.list[alb][filename].orientedHeight,
+      };
       //let imageobj = {key: filename, src: imageurl, width: this.props.list[alb][filename].width, height: this.props.list[alb][filename].height};
 
       // if it is a video then we want a thumbnail image url instead
-      if(this.props.list[alb][filename].format === 'video') {
+      if (this.props.list[alb][filename].format === 'video') {
         let videoparams = {
           token: this.props.authtoken,
           album: alb,
           image: filename,
         };
         imageobj['data-video-src'] = API.videourl(videoparams);
-        if(!imageobj['data-video-src']) {
+        if (!imageobj['data-video-src']) {
           continue;
         }
       }
@@ -145,8 +149,8 @@ class Collection extends React.Component {
     if (!imagelist) {
       return [];
     }
-    return(imagelist);
-  }
+    return imagelist;
+  };
 
   handleOnClick = (e, obj) => {
     //console.log(e.target);
@@ -157,21 +161,38 @@ class Collection extends React.Component {
     window.open(e.target.src);
     //console.log(obj);
     //window.open(obj.photo.src);
-  }
+  };
 
   render() {
-    let {description} = this.getURLParams();
+    let { description } = this.getURLParams();
     return (
       <div>
         <Breadcrumb>
-          <Breadcrumb.Item onClick={ e => this.props.history.push("/albums")}>Albums</Breadcrumb.Item>
-          <Breadcrumb.Item onClick={ e => this.props.history.push("/list/" + this.props.match.params.album)}>Collections</Breadcrumb.Item>
+          <Breadcrumb.Item onClick={(e) => this.props.history.push('/albums')}>
+            Albums
+          </Breadcrumb.Item>
+          <Breadcrumb.Item
+            onClick={(e) =>
+              this.props.history.push('/list/' + this.props.match.params.album)
+            }
+          >
+            Collections
+          </Breadcrumb.Item>
           <Breadcrumb.Item active>Collection</Breadcrumb.Item>
         </Breadcrumb>
-        <h4 style={{overflow: 'hidden',}}>{this.props.match.params.album}<br/><small>{description}</small></h4>
+        <h4 style={{ overflow: 'hidden' }}>
+          {this.props.match.params.album}
+          <br />
+          <small>{description}</small>
+        </h4>
         <Row>
           <Col xs={12}>
-            <Gallery columns={4} margin={1} photos={this.photos()} onClick={this.handleOnClick} />
+            <Gallery
+              columns={4}
+              margin={1}
+              photos={this.photos()}
+              onClick={this.handleOnClick}
+            />
             {/*<ImageList photos={this.photos()} onClick={this.handleOnClick} />*/}
             {/*<PhotoSwipeGallery items={this.photos()} onClick={this.handleOnClick} options={{shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} />*/}
           </Col>
@@ -182,4 +203,3 @@ class Collection extends React.Component {
 }
 
 export default Collection;
-
