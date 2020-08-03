@@ -67,6 +67,10 @@ module.exports = ({ passport, auth }) => {
         'Access-Control-Allow-Headers',
         'Origin, X-Requested-With, Content-Type, Accept, X-API-Key'
       )
+      res.header(
+        'Access-Control-Allow-Methods',
+        '*'
+      )
       res.header('Access-Control-Allow-Credentials', 'true')
       next()
     })

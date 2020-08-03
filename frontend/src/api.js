@@ -178,6 +178,35 @@ const API = {
       .catch((error) => console.log('FETCH ERROR: ' + error.message));
   },
 
+  tag: async (opts) => {
+    try {
+      const res = await fetch(api_prefix + '/image-data', {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        //credentials: 'include',
+        body: JSON.stringify({
+          ...opts,
+        }),
+      });
+      const jsonData = await res.json();
+      if (jsonData.error) {
+        console.log(
+          'UPDATE PAGE ERROR: (' +
+            jsonData.error.code +
+            ') ' +
+            jsonData.error.message
+        );
+        return null;
+      }
+      return jsonData.result;
+    } catch (err) {
+      console.log('FETCH ERROR: ' + err.message);
+    }
+  },
+
   imageurl: (opts) => {
     if (!opts.album || !opts.image || !opts.token) {
       return false;

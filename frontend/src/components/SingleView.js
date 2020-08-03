@@ -5,6 +5,8 @@ import React from 'react';
 import { Breadcrumb, Row, Col, Button } from 'react-bootstrap';
 import { getURLParams } from '../utils';
 
+import Edit from './Edit';
+
 const pageNameMap = {
   view: 'View',
   edit: 'Edit',
@@ -15,9 +17,15 @@ export const SingleView = (props) => {
     ? pageNameMap[props.action]
     : 'UNKNOWN';
 
-  let { imageurl, thumburl, imageIndex, collection } = getURLParams(
+  let { imageurl, thumburl, imageIndex, collection, image } = getURLParams(
     props.location.search,
-    { imageurl: null, thumburl: null, imageIndex: null, collection: null }
+    {
+      imageurl: null,
+      thumburl: null,
+      imageIndex: null,
+      collection: null,
+      image: null,
+    }
   );
 
   return (
@@ -66,7 +74,13 @@ export const SingleView = (props) => {
       <Row>
         <Col xs={12}>
           {props.action === 'edit' ? (
-            <div />
+            <Edit
+              history={props.history}
+              album={props.match.params.album}
+              image={image}
+              imageIndex={imageIndex}
+              collection={collection}
+            />
           ) : (
             <video
               controls={true}

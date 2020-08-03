@@ -86,7 +86,7 @@ const VideoHtml = (props) => (
         'singleview/' +
         props.album +
         '?imageurl=' +
-        encodeURIComponent(props.image) +
+        encodeURIComponent(props.imageurl) +
         '&thumburl=' +
         encodeURIComponent(props.thumburl) +
         '&collection=' +
@@ -132,14 +132,14 @@ const VideoHtml = (props) => (
 
 const PhotoCaption = (props) => (
   <span>
-    {props.filename}{' '}
+    {props.image}{' '}
     <a
       href={
         props.basename +
         'edit/' +
         props.album +
-        '?filename=' +
-        encodeURIComponent(props.filename) +
+        '?image=' +
+        encodeURIComponent(props.image) +
         '&collection=' +
         encodeURIComponent(props.collection) +
         '&imageIndex=' +
@@ -199,11 +199,11 @@ class List extends React.Component {
     // TODO sort by modify date instead of filename;
     let sortedCollectionItems = collectionItems.sort();
     for (let i = 0; i < sortedCollectionItems.length; i++) {
-      let filename = sortedCollectionItems[i];
+      let image = sortedCollectionItems[i];
       let imageurl = API.imageurl({
         token: this.props.authtoken,
         album: alb,
-        image: filename,
+        image,
       });
       if (!imageurl) {
         continue;
@@ -211,7 +211,7 @@ class List extends React.Component {
       let thumburl = API.imageurl({
         token: this.props.authtoken,
         album: alb,
-        image: filename,
+        image,
         thumb: this.thumbDim,
       });
       //if (!(filename in this.props.thumbs[alb][this.thumbDim])) {
@@ -220,30 +220,30 @@ class List extends React.Component {
       //let thumburl = this.props.thumbs[alb][this.thumbDim][filename].base64tag;
       //let imageobj = {key: filename, src: thumburl, width, height, orig: imageurl};
       let imageobj = {
-        key: filename,
-        //title: filename,
+        key: image,
+        //title: image,
         title: ReactDOMServer.renderToStaticMarkup(
           <PhotoCaption
             basename={this.props.basename}
             album={this.props.match.params.album}
-            filename={filename}
+            image={image}
             collection={collection}
             imageIndex={imagelist.length}
           />
         ),
         src: imageurl,
-        w: this.props.list[alb][filename].orientedWidth,
-        h: this.props.list[alb][filename].orientedHeight,
+        w: this.props.list[alb][image].orientedWidth,
+        h: this.props.list[alb][image].orientedHeight,
         thumbnail: thumburl,
         thumbnailWidth: width,
         thumbnailHeight: height,
       };
       // if it is actually a video, save location and trick the gallery
-      if (this.props.list[alb][filename].format === 'video') {
+      if (this.props.list[alb][image].format === 'video') {
         let videoparams = {
           token: this.props.authtoken,
           album: alb,
-          image: filename,
+          image,
         };
         imageobj['data-video-src'] = API.videourl(videoparams);
         delete imageobj['src'];
@@ -252,7 +252,7 @@ class List extends React.Component {
             thumburl={thumburl}
             basename={this.props.basename}
             album={this.props.match.params.album}
-            image={imageobj['data-video-src']}
+            imageurl={imageobj['data-video-src']}
             collection={collection}
             imageIndex={imagelist.length}
           />

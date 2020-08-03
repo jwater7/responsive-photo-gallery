@@ -595,7 +595,7 @@ class imageHandler {
       }
     }
 
-    if (Array.isArray(tags) && tags.length) {
+    if (Array.isArray(tags)) {
       const sanTags = tags.map((tag) => sanitize(tag))
       debug(`Updating ${imagePath} tags to:`, sanTags)
       const albumTagsPath = sanitizeToRoot(this.tagsPath, sanAlbum)
