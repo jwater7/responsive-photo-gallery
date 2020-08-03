@@ -75,6 +75,10 @@ const VideoHtml = (props) => (
   </div>
 );
 
+const PhotoCaption = (props) => (
+  <span>{props.filename} <a href={props.basename + "edit/" + props.album + "?filename=" + encodeURIComponent(props.filename) + "&collection=" + encodeURIComponent(props.collection) + "&imageIndex=" + encodeURIComponent(props.imageIndex)}>[edit]</a></span>
+);
+
 class List extends React.Component {
 
   thumbDim = '100x100';
@@ -145,7 +149,8 @@ class List extends React.Component {
       //let imageobj = {key: filename, src: thumburl, width, height, orig: imageurl};
       let imageobj = {
         key: filename,
-        title: filename,
+        //title: filename,
+        title: ReactDOMServer.renderToStaticMarkup(<PhotoCaption basename={this.props.basename} album={this.props.match.params.album} filename={filename} collection={collection} imageIndex={imagelist.length} />),
         src: imageurl,
         w: this.props.list[alb][filename].orientedWidth,
         h: this.props.list[alb][filename].orientedHeight,
@@ -185,6 +190,23 @@ class List extends React.Component {
     const { startIndex } = getURLParams(this.props.location.search, {startIndex: 0});
     const collectionMap = this.getCollectionMapForAlbum(this.props.match.params.album);
     const collectionKeys = [...(Object.keys(collectionMap).includes('favorites') ? ['favorites'] : []), ...(Object.keys(collectionMap).sort().filter(it => it !== 'favorites'))]
+    const options = {
+      index: Number(startIndex),
+
+      // Share buttons
+      // 
+      // Available variables for URL:
+      // {{url}}             - url to current page
+      // {{text}}            - title
+      // {{image_url}}       - encoded image url
+      // {{raw_image_url}}   - raw image url
+      shareButtons: [
+        //{id:'facebook', label:'Share on Facebook', url:'https://www.facebook.com/sharer/sharer.php?u={{url}}'},
+        //{id:'twitter', label:'Tweet', url:'https://twitter.com/intent/tweet?text={{text}}&url={{url}}'},
+        //{id:'favorite', label:'Favorite', url:'../singleview/{{text}}?url={{url}}&media={{image_url}}&description={{raw_image_url}}'},
+        {id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}
+      ],
+    }
     return (
       <div>
         <Breadcrumb>
@@ -205,7 +227,7 @@ class List extends React.Component {
                   {/*<ImageList photos={this.photos(collectionMap[collectionKey].items)} />*/}
                   {/*<Gallery columns={10} margin={.5} photos={this.photos(collectionMap[collectionKey].items)} />*/}
                 </Link>
-                <PhotoSwipeGallery isOpen={isOpen === collectionKey} onClose={this.handleClose} items={this.photos(collectionKey, collectionMap[collectionKey].items)} options={{index: Number(startIndex), shareButtons: [{id:'download', label:'Download image', url:'{{raw_image_url}}', download:true}]}} thumbnailContent={getThumbnailContent} />
+                <PhotoSwipeGallery isOpen={isOpen === collectionKey} onClose={this.handleClose} items={this.photos(collectionKey, collectionMap[collectionKey].items)} options={options} thumbnailContent={getThumbnailContent} />
               </div>
             ))}
           </Col>

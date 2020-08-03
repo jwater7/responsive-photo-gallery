@@ -21,7 +21,8 @@ const AppMain = (props) => (
   <Grid>
     <Switch>
       <PropsRoute exact name="landing" path="/" component={Landing} {...props} />
-      <AuthenticatedRoute path="/singleview/:album" component={SingleViewContainer} {...props} />
+      <AuthenticatedRoute path="/singleview/:album" component={SingleViewContainer} action={'view'} {...props} />
+      <AuthenticatedRoute path="/edit/:album" component={SingleViewContainer} action={'edit'} {...props} />
       <AuthenticatedRoute path="/list/:album" component={ListContainer} {...props} />
       <AuthenticatedRoute path="/collection/:album" component={CollectionContainer} {...props} />
       <AuthenticatedRoute exact path="/albums" component={AlbumsContainer} {...props} />

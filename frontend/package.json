@@ -16,10 +16,14 @@
     "universal-cookie": "^2.1.0"
   },
   "scripts": {
+    "eslint": "eslint .",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject",
     "debug": "REACT_APP_API_PREFIX=http://localhost:8000/ npm run start"
+  },
+  "devDependencies": {
+    "eslint": "^7.6.0"
   }
 }
