@@ -4,7 +4,7 @@ The Express web server will start up on port 3000 by default (this can be change
 
 To run using a docker container (uses local port 8000 to expose default port 3000 so you can bring up a web browser to http://localhost:8000/):
 ~~~~
-docker run -d --name responsive-photo-gallery -v '/your/image/path:/images:ro' -v '/your/persistent/storage/dir:/data:rw' -p 8000:3000 jwater7/responsive-photo-gallery
+docker run -d --name responsive-photo-gallery -v '/path/to/album/folders:/images:ro' -v '/your/persistent/storage/dir:/data:rw' -p 8000:3000 jwater7/responsive-photo-gallery
 ~~~~
 
 To run as node module:

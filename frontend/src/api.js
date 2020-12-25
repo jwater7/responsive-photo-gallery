@@ -125,7 +125,7 @@ const API = {
     fetch(
       api_prefix +
         '/list?album=' +
-        opts.album +
+        encodeURIComponent(opts.album) +
         '&num_results=' +
         max_list_items +
         '&distributed=true&withMetadata=' +
@@ -154,7 +154,7 @@ const API = {
     fetch(
       api_prefix +
         '/thumbnails?album=' +
-        opts.album +
+        encodeURIComponent(opts.album) +
         '&thumb=' +
         opts.thumb +
         '&num_results=' +
@@ -213,9 +213,9 @@ const API = {
     }
     // TODO let iurl = api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
     let iurl =
-      api_prefix + '/image?album=' + opts.album + '&image=' + opts.image;
+      api_prefix + '/image?album=' + encodeURIComponent(opts.album) + '&image=' + encodeURIComponent(opts.image);
     if (opts.thumb) {
-      iurl += '&thumb=' + opts.thumb;
+      iurl += '&thumb=' + encodeURIComponent(opts.thumb);
     }
     return iurl;
   },
@@ -227,9 +227,9 @@ const API = {
     //TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
     // TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
     let iurl =
-      api_prefix + '/video?album=' + opts.album + '&image=' + opts.image;
+      api_prefix + '/video?album=' + encodeURIComponent(opts.album) + '&image=' + encodeURIComponent(opts.image);
     if (opts.thumb) {
-      iurl += '&thumb=' + opts.thumb;
+      iurl += '&thumb=' + encodeURIComponent(opts.thumb);
     }
     return iurl;
   },
