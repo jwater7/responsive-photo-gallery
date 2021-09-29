@@ -30,6 +30,8 @@ The backend may be customized using environment variables:
   Overrides the JSON Web Token signing key with a new one
 * AUTH_PATH (default '/data/auth')
   Sets the path to the authentication data directory for persistance
+* TAGS_PATH (default '/data/tags')
+  Sets the path to the tags data directory for persistance of tag links and saved favorites
 * IMAGE_PATH (default '/images')
   Sets the path the the photos
 * THUMB_PATH (default '/data/thumbs')
