@@ -1,10 +1,10 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
 
-import React from 'react';
+import React, { createRef } from 'react';
 import ReactDOMServer from 'react-dom/server';
 import { Link } from 'react-router-dom';
-import { Breadcrumb, Row, Col } from 'react-bootstrap';
+import { Breadcrumb, Row, Col, Button } from 'react-bootstrap';
 import API from '../api';
 //import Gallery from 'react-photo-gallery';
 //import ImageList from './ImageList';
@@ -289,6 +289,7 @@ class List extends React.Component {
         .sort()
         .filter((it) => it !== 'favorites'),
     ];
+    const refs = collectionKeys.reduce((acc, key) => ({...acc, [key]: createRef()}), {});
     const options = {
       index: Number(startIndex),
 
@@ -320,10 +321,16 @@ class List extends React.Component {
           <Breadcrumb.Item active>Collections</Breadcrumb.Item>
         </Breadcrumb>
         <h4 style={{ overflow: 'hidden' }}>{this.props.match.params.album}</h4>
+        {collectionKeys.map((collectionKey) => (
+          <Button onClick={() => refs[collectionKey].current.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          })}>{`[${collectionMap[collectionKey].description}] `}</Button>
+	))}
         <Row>
           <Col xs={12}>
             {collectionKeys.map((collectionKey) => (
-              <div key={collectionKey}>
+              <div ref={refs[collectionKey]} key={collectionKey}>
                 <Link
                   key={collectionKey}
                   to={{
