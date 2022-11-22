@@ -19,7 +19,7 @@ COPY package.json ./
 #RUN npm install
 # Build using gyp dependencies for sharp, see https://github.com/nodejs/docker-node/issues/282
 RUN apk add --no-cache --virtual .gyp \
-        python \
+        python3 \
         make \
         g++ \
         git \

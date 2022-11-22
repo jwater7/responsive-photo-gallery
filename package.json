@@ -48,7 +48,7 @@
     "cookie-parser": "~1.4.3",
     "debug": "~2.6.9",
     "express": "~4.15.5",
-    "fast-image-processing": "github:jwater7/fast-image-processing#0bdb3f30204b5ddbe995b6f23e0db9618f8fd6cb",
+    "fast-image-processing": "github:jwater7/fast-image-processing#v0.0.1",
     "http-errors": "^1.7.3",
     "jwt-user-auth": "github:jwater7/jwt-user-auth#e230f6e421efdd7e4cf4d1331b58d27805bf1a1b",
     "mkdirp": "^1.0.4",
