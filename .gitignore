@@ -1,3 +1,7 @@
+# Local secrets / env (docker compose auto-loads ./.env). Never commit real
+# secrets; see .env.example for the required variables.
+.env
+
 # Logs
 logs
 *.log
@@ -29,6 +33,21 @@ node_modules
 # Debug log from npm
 npm-debug.log
 
+# All host-side app state + docker-compose runtime volumes (auth, tags, pics,
+# the sprite/thumb cache, meili, redis) are consolidated here. The example prod
+# compose also lives here and is intentionally untracked (local-only).
 /debug-data
 *.swp
 
+/.opencode/
+/.claude/
+/.qwen/
+/.gemini/
+
+# Working scratch / local-only docs (never committed). TODO.md + TODO-DONE.md
+# are the project todo + completed-work log; AGENTS.md / GEMINI.md are local
+# AI-assistant instruction files kept out of the public repo.
+/TODO.md
+/TODO-DONE.md
+/AGENTS.md
+/GEMINI.md

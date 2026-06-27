@@ -1,0 +1,14 @@
+# Build-context filter for the enrichment image, which builds from the REPO ROOT
+# (docker-compose: build.context: .). BuildKit prefers this file (next to the
+# Dockerfile) over the root .dockerignore. Keep the context tiny: the root
+# workspace manifest, the enrichment member, and the rpg-config package it links.
+*
+!package.json
+!enrichment
+!packages
+# Heavy / irrelevant bits inside the allowed paths.
+**/node_modules
+**/.git
+debug-data
+packages/fast-image-processing
+packages/jwt-user-auth

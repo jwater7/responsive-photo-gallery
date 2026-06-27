@@ -11,14 +11,25 @@ on:
     branches:
       - master
 
-env:
-  DOCKER_HUB_REPO: responsive-photo-gallery
-
 jobs:
 
   build:
 
     runs-on: ubuntu-latest
+
+    # Two independent images. Both build from the repo-root context (the
+    # npm-workspaces monorepo root) with their own member Dockerfile, and each
+    # pushes to its own Docker Hub repo. Add new images by extending this matrix.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - context: .
+            dockerfile: gallery/Dockerfile
+            repo: responsive-photo-gallery
+          - context: .
+            dockerfile: enrichment/Dockerfile
+            repo: responsive-photo-enrichment-indexer
 
     steps:
     - uses: actions/checkout@v3
@@ -31,11 +42,12 @@ jobs:
       id: meta
       uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
       with:
-        images: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_HUB_REPO }}
+        images: ${{ secrets.DOCKER_USERNAME }}/${{ matrix.repo }}
     - name: Build and push Docker image
       uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
       with:
-        context: .
+        context: ${{ matrix.context }}
+        file: ${{ matrix.dockerfile }}
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}

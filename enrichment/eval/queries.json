@@ -1,0 +1,9 @@
+{
+  "description": "Tiny labeled set to sanity-check and tune hybrid search. expectPathIncludes is a substring expected in the top results. Run: node src/bin/eval.js (service must be running).",
+  "topK": 5,
+  "cases": [
+    { "query": "airplane", "expectPathIncludes": "boeing", "note": "semantic: image has no text" },
+    { "query": "baseball stadium", "expectPathIncludes": "sign", "note": "keyword+semantic: rendered sign" },
+    { "query": "test card", "expectPathIncludes": "Test_card", "note": "keyword: OCR/text" }
+  ]
+}

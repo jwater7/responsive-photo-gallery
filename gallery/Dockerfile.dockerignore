@@ -1,0 +1,14 @@
+# Build-context filter for the gallery image, which builds from the REPO ROOT
+# (workspace root) for the scoped workspace install. BuildKit prefers this file
+# (next to the Dockerfile) over the root .dockerignore. Keep the context to the
+# root manifest, the gallery member, and the shared packages it links.
+*
+!package.json
+!gallery
+!packages
+# Heavy / irrelevant bits inside the allowed paths.
+**/node_modules
+**/.git
+# Never ship a stale host frontend export — the frontend-build stage produces it.
+gallery/frontend/build
+debug-data

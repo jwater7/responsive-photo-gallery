@@ -1,0 +1,231 @@
+services:
+  # Main Express Photo Gallery App
+  rpg-app-local:
+    container_name: rpg-app-local
+    # Build from the repo root (workspace root) using the relocated gallery
+    # Dockerfile; the scoped workspace install links the shared packages.
+    build:
+      context: .
+      dockerfile: gallery/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      # Durable host bind mounts for all app state, consolidated under
+      # ./debug-data. `config` (CONFIG_PATH=/data/config) holds gallery-owned
+      # runtime config — the auth DB under config/auth (JWT signing key + cookie
+      # secret) and excludes.json (Admin-managed hidden dirs); `cache`
+      # (CACHE_PATH=/data/cache) is the derived-image tree — per-album sprite
+      # sheets, collage covers, manifests, and the thumbnail caches (thumbs/ +
+      # video-thumbs/). Photos are a read-only input — point this at your album
+      # folders in production. (auth moved under config/; a legacy /data/auth is
+      # auto-migrated once on boot — see lib/runtime-config.js.)
+      - "./debug-data/config:/data/config:rw"
+      - "./debug-data/tags:/data/tags:rw"
+      - "./debug-data/cache:/data/cache:rw"
+      - "./debug-data/pics:/images:ro"
+    environment:
+      - SWAGGER_ROOT_PATH=/
+      # Deployment base path (the single required knob). The prebuilt frontend
+      # bakes sentinels that docker-entrypoint.sh rewrites at container start, so
+      # set "/" for the domain root or e.g. "/photos" for sub-path hosting.
+      - PUBLIC_URL=/
+      # Gallery-owned runtime config (auth DB + excludes.json) lives at
+      # CONFIG_PATH, which defaults to /data/config — matching the bind mount
+      # above (and the worker's ro mount). Only set it to relocate:
+      # - CONFIG_PATH=/data/config
+      # Optional independent overrides (default to PUBLIC_URL). NEXT_PUBLIC_BASENAME
+      # sets the router basename + login cookie path; NEXT_PUBLIC_API_PREFIX sets
+      # the API endpoint and may point at a different path/origin. Rewritten at
+      # start like PUBLIC_URL — they are frozen at build, so these env values are
+      # applied by the entrypoint, not read by the static export directly.
+      # - NEXT_PUBLIC_BASENAME=/
+      # - NEXT_PUBLIC_API_PREFIX=/
+      - DEBUG=responsive-photo-gallery:*
+      # The cookie-signing secret is generated and persisted in the auth bind
+      # mount (jwt-user-auth config), not supplied here — see app.js.
+      # Behind a TLS-terminating reverse proxy, set TRUST_PROXY so auth cookies
+      # are marked Secure. Defaults off for the plain-HTTP dev stack.
+      - TRUST_PROXY=${TRUST_PROXY:-false}
+      # The gallery app does not talk to Meili directly (it proxies enrichment via
+      # ENRICH_URL → the indexer), so no MEILI_* config here.
+      - ENRICH_URL=http://rpg-enrichment-indexer:8080
+    healthcheck:
+      # The frontend root serves index.html (200) once Express is up.
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    # Cold-album builds (sharp decode + ffmpeg) run in this container alongside
+    # the enrichment container's CLIP work; bound CPU/memory so a large build
+    # can't exhaust the host. Sized to the Stage 3 build pass.
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+        reservations:
+          memory: 512m
+    depends_on:
+      # Ordering only (service_started, NOT service_healthy): the gallery is
+      # designed to run in degraded mode when the enrichment plane is down, so it
+      # must not be blocked from starting if the indexer is unhealthy.
+      rpg-enrichment-indexer:
+        condition: service_started
+    restart: unless-stopped
+
+  # Image enrichment API (Express API + Swagger + /health). The heavy plane —
+  # the BullMQ worker, watcher, reconcile cron — runs in rpg-enrichment-worker
+  # (below); this service only accepts triggers (forwarded to the worker over a
+  # Redis control queue), serves search/status, and embeds the short search query
+  # text. Keeping inference out of this process keeps /health responsive.
+  rpg-enrichment-indexer:
+    # Build from the repo root so the image can vendor packages/config (rpg-config);
+    # the enrichment/Dockerfile.dockerignore keeps that context minimal.
+    build:
+      context: .
+      dockerfile: enrichment/Dockerfile
+    container_name: rpg-enrichment-indexer
+    # No host port: the enrichment plane is reachable only on the internal
+    # network, via the gallery's authenticated /api/v1/enrich proxy. Direct
+    # host access for native dev lives in docker-compose.deps.yml.
+    volumes:
+      - "./debug-data/pics:/images:ro"
+      # CLIP weights are baked into the image (see enrichment/Dockerfile); no mount
+      # here, or the baked /data/models would be shadowed by an empty volume.
+    environment:
+      # Only vars that DIFFER from the code default are set; the rest are left to
+      # their defaults (commented for discoverability). MEILI_HOST_URL/REDIS_URL
+      # are kept explicit — they reference service names that vary per deployment.
+      # - IMAGE_PATH=/images            # default /images (matches the ro mount)
+      - MEILI_HOST_URL=http://rpg-meilisearch:7700
+      # No MEILI_MASTER_KEY: Meili runs keyless on the internal network (see below);
+      # the indexer's meiliApiKey defaults to "" and talks to it unauthenticated.
+      - REDIS_URL=redis://rpg-redis:6379
+      # - MODEL_CACHE_PATH=/data/models # default /data/models (where the image
+      #   bakes CLIP). Still relevant here: the API lazily loads CLIP to embed the
+      #   search query text. SCAN_INTERVAL_HOURS / WORKER_CONCURRENCY live on the
+      #   worker service, which owns the cron and the enrichment worker.
+    healthcheck:
+      # curl is present in the enrichment image (enrichment/Dockerfile installs it).
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      # The boot race the design calls out: the indexer must not start before
+      # Meili and Redis are accepting connections.
+      rpg-meilisearch:
+        condition: service_healthy
+      rpg-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Image enrichment worker (BullMQ worker + control consumer + watcher + cron +
+  # heartbeat). Same image as the indexer, with the command overridden to the
+  # worker entry point. This is the heavy, CPU-bound plane (CLIP inference, the
+  # reconcile tree walk); running it as its own process keeps it off the API's
+  # event loop so /health and /status stay responsive while enrichment runs. It
+  # has no host port and reaches the API only through Redis (the control queue +
+  # shared scan state).
+  rpg-enrichment-worker:
+    # Same image as the indexer (built from the repo root for packages/config).
+    build:
+      context: .
+      dockerfile: enrichment/Dockerfile
+    container_name: rpg-enrichment-worker
+    command: ["node", "src/bin/worker.js"]
+    volumes:
+      - "./debug-data/pics:/images:ro"
+      # Shared runtime config, READ-ONLY: the worker's reconcile/reap walk reads
+      # excludes.json fresh each pass (the gallery is the sole writer). The
+      # indexer doesn't walk, so it gets no config mount (minimal surface).
+      - "./debug-data/config:/data/config:ro"
+      # CLIP weights baked into the image (as above); no mount, or the baked
+      # /data/models would be shadowed.
+    environment:
+      # Only vars that DIFFER from the code default are set; defaults are left
+      # commented for discoverability (MEILI_HOST_URL/REDIS_URL stay explicit —
+      # they reference per-deployment service names).
+      # - IMAGE_PATH=/images            # default /images (matches the ro mount)
+      # - CONFIG_PATH=/data/config      # default /data/config (matches the ro mount)
+      - MEILI_HOST_URL=http://rpg-meilisearch:7700
+      - REDIS_URL=redis://rpg-redis:6379
+      # - SCAN_INTERVAL_HOURS=24        # default 24 (reconcile cron cadence)
+      # - WORKER_CONCURRENCY=2          # default 2  (parallel enrichment jobs)
+      # - HEARTBEAT_INTERVAL_MIN=30     # default 30 (progress heartbeat; 0 = off)
+      # - MODEL_CACHE_PATH=/data/models # default /data/models (baked CLIP weights)
+      # OCR tuning (see TODO Enrichment #7; profile with `npm run ocr:bench`).
+      # - OCR_MIN_CONFIDENCE=50         # default 50 (drop words below this 0-100 conf)
+      # - OCR_PSM=11                    # default (unset) = Tesseract PSM 3; 11/12 = sparse text, better for photos
+      # - OCR_TESSDATA_PREFIX=/data/tessdata-best  # default (unset) = fast eng data; this = bundled tessdata_best LSTM (slower, more accurate)
+      # - OCR_PREPROCESS=true           # default off; upscale+contrast+sharpen before OCR (costs time per image)
+    # The worker holds the CLIP model (loaded per worker concurrency under load),
+    # so bound its memory. Sized as a starting point; revisit under TODO
+    # Enrichment #6 (throughput/scale) alongside EMBED_MODEL/WORKER_CONCURRENCY.
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1g
+    depends_on:
+      rpg-meilisearch:
+        condition: service_healthy
+      rpg-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Redis - enrichment job queue broker (BullMQ)
+  rpg-redis:
+    # Pinned (was the floating redis:7-alpine) for reproducible builds. Redis is
+    # just the BullMQ broker — its on-disk AOF is transient job state, so bumping
+    # this tag is low-risk (no data migration needed).
+    image: redis:8.8.0-alpine
+    container_name: rpg-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - "./debug-data/redis:/data"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MeiliSearch — enrichment search index
+  rpg-meilisearch:
+    # Pinned (was the floating :latest). IMPORTANT: Meili version-stamps its
+    # on-disk database (the bind-mounted data.ms below). Bumping this tag across
+    # a minor/major makes the new binary REFUSE to boot on an old data.ms — it
+    # won't corrupt the data, but the container crash-loops and the indexer
+    # (depends_on: service_healthy) stays down. To bump: dump+import on the old
+    # version, or start once with MEILI_EXPERIMENTAL_DUMPLESS_UPGRADE=true to
+    # migrate in place (back up data.ms first). data.ms is a derived index, so a
+    # full re-Sync is also a valid fallback.
+    image: getmeili/meilisearch:v1.47.0
+    container_name: rpg-meilisearch
+    environment:
+      # Keyless: no MEILI_MASTER_KEY. Meili has no host ports and is reachable only
+      # by the indexer on the internal network, so its API needs no master key — and
+      # this keeps the stack fully self-contained (no supplied/generated secret). The
+      # prior insecure `masterKey` default is removed.
+      MEILI_HTTP_ADDR: 0.0.0.0:7700
+      MEILI_NO_ANALYTICS: "true" # no telemetry phone-home; keep the stack air-gapped
+    volumes:
+      # NOTE: the image's data dir is /meili_data (underscore). A hyphen here
+      # silently sends Meili's data.ms to the container's ephemeral layer.
+      - "./debug-data/meili:/meili_data"
+    # No host port: Meili is reached only on the internal network (by the enrichment
+    # indexer). Native dev re-publishes nothing here; it reaches enrichment via the
+    # indexer's :8080 (see docker-compose.deps.yml).
+    healthcheck:
+      # Meili listens on IPv4 0.0.0.0:7700; use curl against 127.0.0.1 explicitly
+      # (the image's wget resolves "localhost" to IPv6 ::1 → connection refused,
+      # which left the container perpetually unhealthy).
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped

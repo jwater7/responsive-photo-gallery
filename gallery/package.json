@@ -1,0 +1,64 @@
+{
+  "name": "responsive-photo-gallery",
+  "version": "0.2.8",
+  "private": true,
+  "scripts": {
+    "eslint": "eslint .",
+    "test:isolation": "node scripts/check-gallery-isolation.js",
+    "test:unit": "node --test 'test/**/*.test.js'",
+    "test": "npm run test:isolation && npm run test:unit",
+    "build-debug-frontend": "PUBLIC_URL=/ npm run build-frontend",
+    "build-frontend": "cd frontend && npm run build",
+    "start": "node ./bin/www"
+  },
+  "dependencies": {
+    "bluebird": "^3.7.2",
+    "body-parser": "^2.3.0",
+    "cookie-parser": "~1.4.6",
+    "cors": "^2.8.6",
+    "debug": "^4.4.3",
+    "express": "^5.2.1",
+    "fast-image-processing": "*",
+    "http-errors": "^2.0.1",
+    "jsonwebtoken": "^9.0.3",
+    "jwt-user-auth": "*",
+    "mkdirp": "^3.0.1",
+    "morgan": "^1.11.0",
+    "passport": "^0.7.0",
+    "passport-strategy": "^1.0.0",
+    "pug": "^3.0.4",
+    "query-string": "^9.4.0",
+    "rpg-config": "*",
+    "sanitize-filename": "^1.6.4",
+    "serve-favicon": "^2.5.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "description": "NodeJS backend to serve a photo collection in a mobile-friendly and beautiful way",
+  "main": "app.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwater7/responsive-photo-gallery.git"
+  },
+  "keywords": [
+    "photo",
+    "picture",
+    "image",
+    "gallery",
+    "album"
+  ],
+  "author": "j",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jwater7/responsive-photo-gallery/issues"
+  },
+  "homepage": "https://github.com/jwater7/responsive-photo-gallery#readme",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4"
+  }
+}

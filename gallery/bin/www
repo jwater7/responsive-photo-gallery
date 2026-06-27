@@ -1,0 +1,128 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var createApp = require('../app');
+var albumBuild = require('../handlers/album-build');
+var debug = require('debug')('responsive-photo-gallery:server');
+var debugErr = require('debug')('responsive-photo-gallery:server:error');
+debugErr.enabled = true; // errors are always-on, not gated by DEBUG
+// Liveness/progress heartbeat. Plain info namespace (gated by DEBUG, not
+// force-on); the timer only emits while album builds are actually in flight.
+var debugHeartbeat = require('debug')('responsive-photo-gallery:heartbeat');
+var http = require('http');
+
+createApp().then(app => {
+  /**
+   * Get port from environment and store in Express.
+   */
+
+  var port = normalizePort(process.env.PORT || '3000');
+  app.set('port', port);
+
+  /**
+   * Create HTTP server.
+   */
+
+  var server = http.createServer(app);
+
+  /**
+   * Listen on provided port, on all network interfaces.
+   */
+
+  server.listen(port);
+  server.on('error', onError);
+  server.on('listening', onListening);
+
+  /**
+   * Periodic liveness/progress heartbeat. Only emits while album builds are
+   * actually in flight, so idle logs stay quiet; unref'd so it never holds the
+   * process open. HEARTBEAT_INTERVAL_MIN=0 disables it.
+   */
+
+  var heartbeatMin = parseInt(process.env.HEARTBEAT_INTERVAL_MIN, 10);
+  if (isNaN(heartbeatMin)) heartbeatMin = 30;
+  if (heartbeatMin > 0) {
+    var heartbeatTimer = setInterval(function () {
+      var activity = albumBuild.getActivity();
+      if (!activity.building.length) return; // quiet when nothing is building
+      var names = activity.building
+        .map(function (b) {
+          return b.total > 0
+            ? b.album + ' (' + b.done + '/' + b.total + ')'
+            : b.album + ' (queued)';
+        })
+        .join(', ');
+      debugHeartbeat(
+        'building %d album(s) [%d active / %d queued]: %s',
+        activity.building.length,
+        activity.activeBuilds,
+        activity.queuedBuilds,
+        names
+      );
+    }, heartbeatMin * 60 * 1000);
+    heartbeatTimer.unref();
+  }
+
+  /**
+   * Normalize a port into a number, string, or false.
+   */
+
+  function normalizePort(val) {
+    var port = parseInt(val, 10);
+
+    if (isNaN(port)) {
+      // named pipe
+      return val;
+    }
+
+    if (port >= 0) {
+      // port number
+      return port;
+    }
+
+    return false;
+  }
+
+  /**
+   * Event listener for HTTP server "error" event.
+   */
+
+  function onError(error) {
+    if (error.syscall !== 'listen') {
+      throw error;
+    }
+
+    var bind = typeof port === 'string'
+      ? 'Pipe ' + port
+      : 'Port ' + port;
+
+    // handle specific listen errors with friendly messages
+    switch (error.code) {
+      case 'EACCES':
+        debugErr('%s requires elevated privileges', bind);
+        process.exit(1);
+        break;
+      case 'EADDRINUSE':
+        debugErr('%s is already in use', bind);
+        process.exit(1);
+        break;
+      default:
+        throw error;
+    }
+  }
+
+  /**
+   * Event listener for HTTP server "listening" event.
+   */
+
+  function onListening() {
+    var addr = server.address();
+    var bind = typeof addr === 'string'
+      ? 'pipe ' + addr
+      : 'port ' + addr.port;
+    debug('Listening on ' + bind);
+  }
+})

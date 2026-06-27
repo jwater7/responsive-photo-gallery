@@ -1,0 +1,21 @@
+# Native-development override.
+#
+# Use this together with the main compose to run ONLY the stateful backends
+# (Redis, MeiliSearch) plus the enrichment API + worker in Docker, while
+# Express + Next run natively (`npm run dev`). It re-publishes the enrichment
+# API's port to localhost so the natively-run Express can reach it via
+# ENRICH_URL=http://localhost:8080. (The default compose keeps :8080 internal so
+# the only external entry point is the gallery's authenticated /api/v1/enrich.)
+#
+#   docker compose -f docker-compose.yml -f docker-compose.deps.yml \
+#     up -d rpg-redis rpg-meilisearch rpg-enrichment-indexer rpg-enrichment-worker
+#
+# Driven by `npm run dev:deps`. Redis/Meili are reached by the dockerized
+# enrichment services over the internal network; the native Express only needs the
+# enrichment API (and the browser reaches Express via the Next /api/* rewrite). The
+# worker runs in Docker too so scans/enrichment work during native dev.
+
+services:
+  rpg-enrichment-indexer:
+    ports:
+      - "8080:8080"

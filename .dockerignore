@@ -2,3 +2,13 @@ node_modules
 npm-debug.log
 frontend/node_modules
 frontend/npm-debug.log
+# The frontend export is produced in the build stage and copied in; never ship a
+# stale host build (it would also carry an already-rewritten/sentinel base path).
+frontend/build
+# Not needed in the gallery image: the enrichment service has its own build
+# context (./enrichment), debug fixtures are bind-mounted at runtime, and these
+# are history/docs.
+enrichment
+debug-data
+openspec
+.git

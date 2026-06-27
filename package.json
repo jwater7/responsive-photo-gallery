@@ -1,90 +1,19 @@
 {
-  "name": "responsive-photo-gallery",
-  "version": "0.2.8",
+  "name": "responsive-photo-gallery-monorepo",
+  "version": "0.0.0",
   "private": true,
-  "scripts": {
-    "eslint": "eslint .",
-    "debug": "IMAGE_PATH=./debug-data/pics AUTH_PATH=./debug-data/data/auth PRIVATE_KEY=nonvolatile THUMB_PATH=./debug-data/data/thumbs TAGS_PATH=./debug-data/data/tags PORT=8000 DEBUG=express,responsive-photo-gallery:* npm start",
-    "build-debug-frontend": "PUBLIC_URL=/ npm run build-frontend",
-    "build-frontend": "cd frontend; npm run build; cd ..",
-    "start": "node ./bin/www"
-  },
-  "eslintConfig": {
-    "ignorePatterns": [
-      "frontend"
-    ],
-    "env": {
-      "jest": true,
-      "node": true,
-      "es6": true
-    },
-    "parserOptions": {
-      "ecmaVersion": 9
-    },
-    "extends": [
-      "eslint:recommended",
-      "plugin:prettier/recommended"
-    ],
-    "rules": {
-      "no-unused-vars": [
-        "error",
-        {
-          "argsIgnorePattern": "^(next|reject)$"
-        }
-      ],
-      "prettier/prettier": [
-        "error",
-        {
-          "singleQuote": true,
-          "semi": false,
-          "trailingComma": "es5"
-        }
-      ]
-    }
-  },
-  "dependencies": {
-    "bluebird": "^3.5.2",
-    "body-parser": "~1.18.2",
-    "cookie-parser": "~1.4.3",
-    "debug": "~2.6.9",
-    "express": "~4.15.5",
-    "fast-image-processing": "github:jwater7/fast-image-processing#v0.0.3",
-    "http-errors": "^1.7.3",
-    "jwt-user-auth": "github:jwater7/jwt-user-auth#v0.0.1",
-    "mkdirp": "^1.0.4",
-    "morgan": "~1.9.0",
-    "passport": "^0.4.1",
-    "passport-jwt-cookiecombo": "^1.0.5",
-    "pug": "2.0.0-beta11",
-    "query-string": "^6.0.0",
-    "sanitize-filename": "^1.6.1",
-    "serve-favicon": "~2.4.5",
-    "swagger-jsdoc": "^1.9.7",
-    "swagger-ui-express": "^2.0.9"
-  },
-  "description": "NodeJS backend to serve a photo collection in a mobile-friendly and beautiful way",
-  "main": "app.js",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jwater7/responsive-photo-gallery.git"
-  },
-  "keywords": [
-    "photo",
-    "picture",
-    "image",
-    "gallery",
-    "album"
-  ],
-  "author": "j",
+  "description": "Workspace root: the gallery app, the enrichment service, and the shared in-tree packages. No application code lives here.",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jwater7/responsive-photo-gallery/issues"
-  },
-  "homepage": "https://github.com/jwater7/responsive-photo-gallery#readme",
-  "devDependencies": {
-    "eslint": "^7.6.0",
-    "eslint-config-prettier": "^6.11.0",
-    "eslint-plugin-prettier": "^3.1.4",
-    "prettier": "^2.0.5"
+  "workspaces": [
+    "gallery",
+    "enrichment",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test -w packages/config -w gallery -w enrichment",
+    "dev:deps": "docker compose -f docker-compose.yml -f docker-compose.deps.yml up -d rpg-redis rpg-meilisearch rpg-enrichment-indexer rpg-enrichment-worker",
+    "dev:api": "IMAGE_PATH=./debug-data/pics CONFIG_PATH=./debug-data/config PRIVATE_KEY=nonvolatile CACHE_PATH=./debug-data/cache TAGS_PATH=./debug-data/tags ENRICH_URL=http://localhost:8080 PORT=8000 DEBUG=express,responsive-photo-gallery:* node --watch gallery/bin/www",
+    "dev:ui": "cd gallery/frontend && npm run dev",
+    "dev": "npm run dev:deps && (trap 'kill 0' INT; npm run dev:api & npm run dev:ui & wait)"
   }
 }

@@ -1,0 +1,29 @@
+{
+  "name": "jwt-user-auth",
+  "version": "0.0.0",
+  "description": "JSON web token authentication library with express helper functions using flat file user database",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwater7/jwt-user-auth.git"
+  },
+  "keywords": [
+    "JSON",
+    "jwt",
+    "authentication",
+    "express"
+  ],
+  "author": "j",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jwater7/jwt-user-auth/issues"
+  },
+  "homepage": "https://github.com/jwater7/jwt-user-auth#readme",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "rpg-config": "*"
+  }
+}
