@@ -13,6 +13,12 @@ const MIME_BY_EXT = {
   ".tiff": "image/tiff",
   ".bmp": "image/bmp",
   ".webp": "image/webp",
+  // Video: the base doc's mime_type drives video-vs-image rendering on the
+  // frontend (map slide, lightbox) — no separate media_type field is needed.
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".m4v": "video/x-m4v",
+  ".webm": "video/webm",
 };
 
 /** SHA256 of a file's contents, streamed to avoid loading large files at once. */

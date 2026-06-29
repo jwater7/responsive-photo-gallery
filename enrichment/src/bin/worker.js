@@ -24,7 +24,7 @@ const queue = require("../lib/queue");
 const reconcile = require("../lib/reconcile");
 const { startWorker, stopWorker, startControlWorker, stopControlWorker } = require("../lib/worker");
 const enrichers = require("../enrichers");
-const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { MEDIA_FORMAT_REGEXP } = require("../lib/walk-dir");
 const { loadExcludes, isExcluded } = require("rpg-config");
 
 const debug = require("debug")("responsive-photo-gallery:worker-main");
@@ -78,7 +78,7 @@ async function main() {
   let watcher = null;
   if (config.watchEnabled) {
     const onFile = (absPath) => {
-      if (!SUPPORTED_FORMAT_REGEXP.test(absPath)) return;
+      if (!MEDIA_FORMAT_REGEXP.test(absPath)) return;
       const file = fileFromAbs(absPath);
       if (!file) return;
       // Respect the shared excludes (read fresh — cheap, and the watcher is off in

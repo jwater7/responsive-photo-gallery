@@ -16,8 +16,16 @@ WORKDIR /app
 
 # Native OCR engine + English data, ImageMagick for optional preprocessing,
 # and curl/unzip to fetch the offline GeoNames dataset below.
+#
+# ffmpeg provides ffprobe, which the geo enricher uses to read a video's embedded
+# location + capture date (the QuickTime metadata atoms exifr can't reach). It is
+# also forward-compatible groundwork for later frame-based video enrichment
+# (keyframe CLIP/OCR). NOTE: the API and worker containers share this image, so
+# ffmpeg lands in both and adds to the Debian CVE surface (see Security TODO) —
+# accepted because the enrichment plane is internal-only. Debian ships ffprobe
+# only inside the ffmpeg package, so there is no slimmer option.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      tesseract-ocr tesseract-ocr-eng imagemagick curl unzip ca-certificates \
+      tesseract-ocr tesseract-ocr-eng imagemagick ffmpeg curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Bundle the higher-accuracy tessdata_best LSTM model for English (build-time
