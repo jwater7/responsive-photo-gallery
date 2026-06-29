@@ -93,6 +93,9 @@ services:
       - "./debug-data/pics:/images:ro"
       # CLIP weights are baked into the image (see enrichment/Dockerfile); no mount
       # here, or the baked /data/models would be shadowed by an empty volume.
+      # Read-only config: lets the API verify the gallery-written enrich-secret.json
+      # (defense-in-depth on :8080). Fail-open — absent/empty means the gate is off.
+      - "./debug-data/config:/data/config:ro"
     environment:
       # Only vars that DIFFER from the code default are set; the rest are left to
       # their defaults (commented for discoverability). MEILI_HOST_URL/REDIS_URL

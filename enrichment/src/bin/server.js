@@ -23,6 +23,7 @@ const swaggerJsdoc = require("swagger-jsdoc");
 const config = require("../lib/config");
 const meili = require("../lib/meili");
 const queue = require("../lib/queue");
+const requireSharedSecret = require("../lib/require-shared-secret");
 const router = require("../routes/enrichment-api");
 const pjson = require(path.resolve(__dirname, "../../package.json"));
 
@@ -55,7 +56,9 @@ async function main() {
   const spec = buildSwaggerSpec();
   app.get("/swagger.json", (req, res) => res.json(spec));
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(spec));
-  app.use("/api/v1", router);
+  // Optional shared-secret gate (fail-open) in front of the API only; /health,
+  // /swagger.json and /api-docs stay open (health is probed without the secret).
+  app.use("/api/v1", requireSharedSecret, router);
   app.get("/health", (req, res) => res.json({ status: "ok" }));
 
   // Best-effort MeiliSearch connect; never fatal (search re-inits lazily).

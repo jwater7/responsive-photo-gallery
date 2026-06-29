@@ -7,11 +7,24 @@
 // gallery never depends on the enrichment plane for normal operation.
 
 const express = require('express')
+const runtimeConfig = require('rpg-config')
 
 const ENRICH_URL =
   process.env.ENRICH_URL || 'http://rpg-enrichment-indexer:8080'
 
 const router = express.Router()
+
+// Outbound headers for calls into the enrichment API. Carries the shared secret
+// (auto-generated + cached by the gallery at startup) when one is configured, so
+// the enrichment service can verify the request came from us. Omitted when no
+// secret exists (fail-open / optional). /health is probed without it (left open).
+function enrichHeaders() {
+  const secret = runtimeConfig.getEnrichSecret()
+  return {
+    'Content-Type': 'application/json',
+    ...(secret && { 'X-Enrich-Secret': secret }),
+  }
+}
 
 // Health probe with hysteresis. The indexer shares one event loop with its
 // enrichment worker, so while it's processing (CLIP/OCR — measured ~3-4s/image)
@@ -82,7 +95,7 @@ async function forward(req, res, targetPath) {
   try {
     const r = await fetch(ENRICH_URL + targetPath, {
       method: req.method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: enrichHeaders(),
       body: ['POST', 'PUT'].includes(req.method)
         ? JSON.stringify(req.body || {})
         : undefined,
@@ -129,7 +142,7 @@ router.post('/reap', (req, res) => forward(req, res, '/api/v1/reap'))
 function triggerReap() {
   return fetch(ENRICH_URL + '/api/v1/reap', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: enrichHeaders(),
     body: '{}',
     signal: AbortSignal.timeout(15000),
   })
