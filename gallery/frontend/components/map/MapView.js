@@ -13,8 +13,9 @@ import Supercluster from 'supercluster';
 import 'leaflet/dist/leaflet.css';
 import Video from 'yet-another-react-lightbox/plugins/video';
 import { geoSearch } from '../../lib/enrich-api';
-import { imageurl, videourl } from '../../lib/api';
+import { imageurl } from '../../lib/api';
 import { imageRef } from '../../lib/image-ref';
+import { docToSlide } from '../../lib/slide';
 import { useFavoritesMulti } from '../../data/use-favorites';
 import MetaLightbox from '../MetaLightbox';
 
@@ -60,33 +61,9 @@ function thumbFor(doc, size = THUMB) {
   return ref ? imageurl({ ...ref, thumb: size }) : null;
 }
 
-// Edge of the lightbox video poster (the still shown before play). Larger than
-// the 64px marker thumb; mirrors the album view's poster size.
-const POSTER = '256x256';
-
-// Build a lightbox slide from an enrichment doc (null if it isn't addressable).
-// A video doc (mime_type video/*) becomes a playable Video-plugin slide
-// (mirrors pages/album.js); everything else is a plain image slide.
-//
-// `width`/`height` (when the geo enricher captured them) let the Video plugin
-// size the player to the clip's aspect ratio. We intentionally do NOT set
-// `preload: 'auto'` like the album does — TODO Video #1 flags eager preload as a
-// cheap win to drop, and a map can show many video pins at once.
-function toSlide(p) {
-  const ref = imageRef(p);
-  if (!ref) return null;
-  if (typeof p.mime_type === 'string' && p.mime_type.startsWith('video/')) {
-    return {
-      type: 'video',
-      poster: imageurl({ ...ref, thumb: POSTER }),
-      sources: [{ src: videourl(ref), type: 'video/mp4' }],
-      download: videourl(ref),
-      ...(p.width && p.height ? { width: p.width, height: p.height } : {}),
-      meta: p,
-    };
-  }
-  return { src: imageurl(ref), meta: p };
-}
+// Lightbox slide from an enrichment doc — shared with search via lib/slide
+// (video docs become fully-buffered Video slides; see MetaLightbox/BufferedVideo).
+const toSlide = docToSlide;
 
 function thumbIcon(doc) {
   const url = thumbFor(doc);

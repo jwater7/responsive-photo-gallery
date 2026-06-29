@@ -12,9 +12,11 @@ import { useSearchParams } from 'next/navigation';
 import { Breadcrumb, Container, Row, Col, Form, Button } from 'react-bootstrap';
 import { usePing } from '../data/use-ping';
 import { useFavoritesMulti } from '../data/use-favorites';
+import Video from 'yet-another-react-lightbox/plugins/video';
 import { geoSearch } from '../lib/enrich-api';
 import { imageurl } from '../lib/api';
 import { imageRef } from '../lib/image-ref';
+import { docToSlide } from '../lib/slide';
 import MetaLightbox from '../components/MetaLightbox';
 import ViewOnMapAction from '../components/ViewOnMapAction';
 
@@ -224,10 +226,7 @@ export default function Search() {
   if (isPingLoading) return <></>;
   if (!loggedIn) return <>Redirecting...</>;
 
-  const slides = results.map((r) => ({
-    src: imageurl({ ...imageRef(r) }),
-    meta: r,
-  }));
+  const slides = results.map(docToSlide).filter(Boolean);
 
   return (
     <div>
@@ -345,6 +344,7 @@ export default function Search() {
 
             <MetaLightbox
               slides={slides}
+              plugins={[Video]}
               open={index >= 0}
               index={index}
               close={() => {

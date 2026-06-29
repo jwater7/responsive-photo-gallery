@@ -20,6 +20,7 @@ import Download from 'yet-another-react-lightbox/plugins/download';
 import 'yet-another-react-lightbox/styles.css';
 
 import ImageMeta, { InfoToggleButton, useTimedInfo } from './ImageMeta';
+import BufferedVideo from './BufferedVideo';
 
 function slideKey(slide) {
   return (slide && (slide.meta?.path || slide.src)) || '';
@@ -116,6 +117,14 @@ export default function MetaLightbox({
       }}
       toolbar={{ buttons }}
       render={{
+        // Video slides play fully-buffered (off RAM) to avoid the bitrate-vs-
+        // bandwidth stutter; only the current slide (offset 0) downloads.
+        // Returning undefined for everything else falls back to the default
+        // (image) slide rendering.
+        slide: ({ slide, offset }) =>
+          slide?.type === 'video' ? (
+            <BufferedVideo slide={slide} active={offset === 0} />
+          ) : undefined,
         slideFooter: ({ slide }) => (
           <ImageMeta
             meta={slide.meta}
