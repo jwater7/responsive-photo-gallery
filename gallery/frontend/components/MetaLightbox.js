@@ -123,7 +123,7 @@ export default function MetaLightbox({
         // (image) slide rendering.
         slide: ({ slide, offset }) =>
           slide?.type === 'video' ? (
-            <BufferedVideo slide={slide} active={offset === 0} />
+            <BufferedVideo slide={slide} active={offset === 0} onReady={info.reveal} />
           ) : undefined,
         slideFooter: ({ slide }) => (
           <ImageMeta

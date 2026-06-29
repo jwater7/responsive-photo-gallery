@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const fmtMB = (bytes) => (bytes / (1024 * 1024)).toFixed(0);
 
-export default function BufferedVideo({ slide, active }) {
+export default function BufferedVideo({ slide, active, onReady }) {
   const src = slide?.sources?.[0]?.src || slide?.download || null;
   const type = slide?.sources?.[0]?.type || 'video/mp4';
 
@@ -90,12 +90,17 @@ export default function BufferedVideo({ slide, active }) {
 
   // Try to start playback once buffered (a click opened the lightbox, but the
   // long buffer wait may exceed the autoplay grace window — controls are the
-  // fallback, so a blocked play() is harmless).
+  // fallback, so a blocked play() is harmless). Also re-reveal the metadata
+  // overlay: it's shown (then auto-hidden) when the slide opens, but for video
+  // that happens during the buffering screen, so without this the info panel
+  // (location/date/"open in map") would already be gone by the time the clip
+  // actually appears.
   useEffect(() => {
-    if (status === 'ready' && videoRef.current) {
-      videoRef.current.play().catch(() => {});
+    if (status === 'ready') {
+      if (videoRef.current) videoRef.current.play().catch(() => {});
+      if (onReady) onReady();
     }
-  }, [status]);
+  }, [status, onReady]);
 
   const wrap = {
     position: 'absolute',
