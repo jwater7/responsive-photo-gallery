@@ -8,10 +8,12 @@
  * dimensions.
  *
  * Invoked as a subprocess via child_process — no fluent-ffmpeg dependency. The
- * coordinate lives in the `com.apple.quicktime.location.ISO6709` container tag;
- * the capture date prefers the timezone-aware Apple creation date over the
- * (usually UTC) `creation_time`, mirroring the gallery's renderVideoCell so the
- * map/date grouping and the album view agree on a clip's local year.
+ * coordinate may ride one of several container tags (Apple
+ * `com.apple.quicktime.location.ISO6709`, generic `location`/`location-eng`, or
+ * Matroska `LOCATION`) — see LOCATION_KEYS; the capture date prefers the
+ * timezone-aware Apple creation date over the (usually UTC) `creation_time`,
+ * mirroring the gallery's renderVideoCell so the map/date grouping and the album
+ * view agree on a clip's local year.
  */
 
 const { execFile } = require("child_process");
@@ -37,19 +39,45 @@ function parseISO6709(s) {
   return { lat, lng };
 }
 
+/** Lower-case all tag keys so lookups are case-insensitive (webm emits LOCATION,
+ *  mp4/mov emit location, etc.). */
+function lowerKeys(tags) {
+  const out = {};
+  for (const k of Object.keys(tags || {})) out[k.toLowerCase()] = tags[k];
+  return out;
+}
+
+// Capture date keys, by precedence: the timezone-aware Apple field first, then
+// the plain (usually UTC) creation_time.
+const DATE_KEYS = ["com.apple.quicktime.creationdate", "creation_time"];
+// GPS keys, by precedence. The coordinate can ride different container tags:
+// Apple (iPhone), the generic location/location-eng (ffmpeg/Android mp4/mov), or
+// LOCATION (Matroska/webm). All compared lower-cased via lowerKeys().
+const LOCATION_KEYS = ["com.apple.quicktime.location.iso6709", "location", "location-eng"];
+
 /**
  * Capture date with precedence: timezone-aware Apple creation date over the
  * plain `creation_time`. Returns a Date, or null when neither is present/valid.
  */
 function parseTakenAt(tags) {
-  for (const key of ["com.apple.quicktime.creationdate", "creation_time"]) {
-    const raw = tags[key];
+  const t = lowerKeys(tags);
+  for (const key of DATE_KEYS) {
+    const raw = t[key];
     if (raw) {
       const d = new Date(raw);
       if (!isNaN(d.getTime())) return d;
     }
   }
   return null;
+}
+
+/** First present location tag (across Apple/generic/webm keys), or undefined. */
+function pickLocation(tags) {
+  const t = lowerKeys(tags);
+  for (const key of LOCATION_KEYS) {
+    if (t[key]) return t[key];
+  }
+  return undefined;
 }
 
 /** Run ffprobe and return the parsed JSON (throws on probe failure / bad JSON). */
@@ -78,7 +106,7 @@ async function videoMeta(absPath) {
   const durationSec = parseFloat(format.duration);
 
   return {
-    gps: parseISO6709(tags["com.apple.quicktime.location.ISO6709"]),
+    gps: parseISO6709(pickLocation(tags)),
     takenAt: parseTakenAt(tags),
     duration: Number.isFinite(durationSec) ? Math.round(durationSec) : null,
     width: vstream && Number.isFinite(vstream.width) ? vstream.width : null,
@@ -86,4 +114,4 @@ async function videoMeta(absPath) {
   };
 }
 
-module.exports = { videoMeta, parseISO6709, parseTakenAt };
+module.exports = { videoMeta, parseISO6709, parseTakenAt, pickLocation };

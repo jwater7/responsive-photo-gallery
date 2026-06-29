@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
-const { parseISO6709, parseTakenAt, videoMeta } = require("../src/lib/video-meta");
+const { parseISO6709, parseTakenAt, pickLocation, videoMeta } = require("../src/lib/video-meta");
 
 test("parseISO6709: lat/lng with altitude", () => {
   assert.deepStrictEqual(parseISO6709("+47.1187-122.9301+034.945/"), {
@@ -58,6 +58,29 @@ test("parseTakenAt: falls back to creation_time", () => {
 test("parseTakenAt: null when absent or unparseable", () => {
   assert.strictEqual(parseTakenAt({}), null);
   assert.strictEqual(parseTakenAt({ creation_time: "not-a-date" }), null);
+});
+
+test("pickLocation: Apple key wins over generic", () => {
+  assert.strictEqual(
+    pickLocation({
+      location: "+1+2/",
+      "com.apple.quicktime.location.ISO6709": "+47.6062-122.3321/",
+    }),
+    "+47.6062-122.3321/"
+  );
+});
+
+test("pickLocation: generic location / location-eng (ffmpeg, Android)", () => {
+  assert.strictEqual(pickLocation({ location: "+47.6062-122.3321/" }), "+47.6062-122.3321/");
+  assert.strictEqual(pickLocation({ "location-eng": "+48.8566+2.3522/" }), "+48.8566+2.3522/");
+});
+
+test("pickLocation: case-insensitive (Matroska/webm LOCATION)", () => {
+  assert.strictEqual(pickLocation({ LOCATION: "+48.8566+2.3522/" }), "+48.8566+2.3522/");
+});
+
+test("pickLocation: undefined when no location tag", () => {
+  assert.strictEqual(pickLocation({ creation_time: "2020-01-01T00:00:00Z" }), undefined);
 });
 
 // ---- real ffprobe integration (skipped where ffmpeg/ffprobe aren't installed) ----
