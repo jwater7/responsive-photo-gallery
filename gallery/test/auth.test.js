@@ -37,6 +37,7 @@ const test = require('node:test')
 const assert = require('node:assert')
 const http = require('node:http')
 const createApp = require('../app')
+const { AUTH_GATE } = require('../lib/require-auth')
 
 // The set of routes is DERIVED from the live app at boot (see discoverRoutes)
 // rather than hand-listed, so this suite can't silently drift behind
@@ -51,48 +52,65 @@ const PUBLIC = new Set([
   'GET /api/v1/swagger.json', // KNOWN info disclosure (asserted separately)
 ])
 
-// Walk the live Express 5 router tree and return "METHOD /full/path" strings
-// for every route mounted under /api/v1 (gallery API + enrichment proxy).
-// Express 5 dropped layer.regexp; the supported way to recover a sub-router's
-// mount prefix is its matcher, which consumes and returns that prefix for any
-// path beneath it. Both API mounts (/api/v1 and /api/v1/enrich) are prefixes
-// of this deep probe, so each sub-router's matcher reports its own mount path.
-function discoverRoutes(app) {
+// Walk the live Express 5 router tree and return, for every route mounted under
+// /api/v1 (gallery API + enrichment proxy), a `{ id: "METHOD /full/path",
+// gated }` entry. `gated` is the structural fail-closed proof: the route is
+// behind the auth gate (the AUTH_GATE-tagged requireAuth middleware) on its
+// resolution path, via EITHER its own handler stack (gallery per-route
+// `required`) OR a mount-level gate registered ahead of its sub-router (the
+// enrich case: `app.use('/api/v1/enrich', requireAuth(passport), router)`).
+//
+// Express 5 dropped layer.regexp; the supported way to recover a mount prefix
+// is the layer's matcher, which consumes and returns that prefix for any path
+// beneath it. Both API mounts (/api/v1 and /api/v1/enrich) are prefixes of this
+// deep probe, so each sub-router's matcher reports its own mount path.
+const carries = (handle) => !!(handle && handle[AUTH_GATE])
+
+function discoverGatedRoutes(app) {
   const DEEP = '/api/v1/enrich/__probe__'
-  const out = new Set()
-  const add = (prefix, route) => {
-    const full = prefix + route.path
-    if (!full.startsWith('/api/v1')) return // ignore static/SPA/error layers
-    for (const m of Object.keys(route.methods)) {
-      if (!route.methods[m]) continue
-      // router.all() registers as `_all`; expand to the verbs we care about.
-      const verbs = m === '_all' ? ['GET', 'POST'] : [m.toUpperCase()]
-      for (const v of verbs) out.add(`${v} ${full}`)
-    }
-  }
-  for (const layer of (app.router || app._router).stack) {
-    if (layer.route) {
-      add('', layer.route) // direct app-level route (e.g. /api/v1/swagger.json)
-    } else if (layer.handle && layer.handle.stack && layer.matchers) {
-      const m = layer.matchers[0](DEEP)
-      if (!m) continue // sub-router not under /api/v1
-      for (const child of layer.handle.stack) {
-        if (child.route) add(m.path, child.route)
+  const out = []
+  const visit = (stack, prefix, ancestorGated) => {
+    const gateMatchers = [] // tagged middleware seen earlier at THIS level
+    for (const layer of stack) {
+      if (layer.route) {
+        const r = layer.route
+        const full = prefix + r.path
+        if (!full.startsWith('/api/v1')) continue // skip static/SPA/error layers
+        const gated =
+          ancestorGated ||
+          r.stack.some((l) => carries(l.handle)) ||
+          gateMatchers.some((m) => m(r.path))
+        for (const meth of Object.keys(r.methods)) {
+          if (!r.methods[meth]) continue
+          // router.all() registers as `_all`; expand to the verbs we care about.
+          const verbs = meth === '_all' ? ['GET', 'POST'] : [meth.toUpperCase()]
+          for (const v of verbs) out.push({ id: `${v} ${full}`, gated })
+        }
+      } else if (carries(layer.handle) && !layer.handle.stack) {
+        gateMatchers.push(layer.matchers[0]) // a mount-level auth gate
+      } else if (layer.handle && layer.handle.stack && layer.matchers) {
+        const m = layer.matchers[0](DEEP)
+        if (!m) continue // sub-router not under /api/v1
+        const childGated =
+          ancestorGated || gateMatchers.some((g) => g(m.path || '/'))
+        visit(layer.handle.stack, m.path, childGated)
       }
     }
   }
-  return [...out]
+  visit((app.router || app._router).stack, '', false)
+  return out
 }
 
 let server, base
-let ROUTES, PROTECTED
+let ROUTES, GATED, PROTECTED
 
 test.before(async () => {
   const app = await createApp()
   server = http.createServer(app)
   await new Promise((r) => server.listen(0, '127.0.0.1', r))
   base = `http://127.0.0.1:${server.address().port}`
-  ROUTES = discoverRoutes(app)
+  GATED = discoverGatedRoutes(app)
+  ROUTES = [...new Set(GATED.map((r) => r.id))]
   PROTECTED = ROUTES.filter((r) => !PUBLIC.has(r))
 })
 
@@ -147,6 +165,29 @@ test('route discovery finds the full /api/v1 surface', async () => {
     'GET /api/v1/enrich/index-stats',
   ]) {
     assert.ok(ROUTES.includes(r), `discovery should include ${r}`)
+  }
+})
+
+// --- 0b. STRUCTURAL fail-closed proof: every discovered route actually carries
+// the auth gate on its resolution path, except the named PUBLIC exceptions.
+// Unlike the behavioral probes below (which observe a 401), this asserts the
+// `required` marking is *wired* — so a route can't pass by 401-ing for an
+// unrelated reason, and a new ungated route fails CI by name. Adding to PUBLIC
+// is the only (deliberate) way to expose a surface. ---
+test('every route is structurally behind the auth gate (or named PUBLIC)', () => {
+  assert.ok(GATED.length >= 18, 'structural walk should find the API surface')
+  for (const { id, gated } of GATED) {
+    if (PUBLIC.has(id)) {
+      assert.ok(
+        !gated,
+        `${id} is whitelisted PUBLIC but carries the auth gate — remove it from PUBLIC`
+      )
+    } else {
+      assert.ok(
+        gated,
+        `${id} is not behind requireAuth and not in the named PUBLIC list`
+      )
+    }
   }
 })
 
