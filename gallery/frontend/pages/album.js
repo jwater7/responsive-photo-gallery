@@ -92,16 +92,20 @@ export default function Album() {
 
   // Reflect the viewed image in the URL (shareable / back-button) without a
   // router navigation (replaceState avoids re-triggering the deep-link effect).
-  // Preserve the existing history state (Next stores its routing metadata —
-  // `__N` — there): passing `null` wipes it, and Next's popstate handler then
-  // refuses to navigate back off this entry, so a later cross-route push (e.g.
-  // "View on map") leaves the back button stuck on the other page.
+  // Patch Next's tracked entry (`url`/`as`), not just the address bar: Next
+  // re-renders from `state.as` on popstate, so leaving `as` at the no-image URL
+  // is why Back off the map landed on the album WITHOUT reopening the lightbox
+  // (the search view fixed the same bug in syncImage). Spread the existing state
+  // so Next's routing metadata (`__N`) is preserved — wiping it would strand the
+  // back button on the other page.
   const setDeepLink = useCallback((image) => {
     if (typeof window === 'undefined') return
     const url = new URL(window.location.href)
     if (image) url.searchParams.set('image', image)
     else url.searchParams.delete('image')
-    window.history.replaceState(window.history.state, '', url)
+    const as = url.pathname + url.search
+    const prev = window.history.state || {}
+    window.history.replaceState({ ...prev, url: as, as }, '', as)
   }, [])
 
   const registerGroupRef = (key) => (el) => {

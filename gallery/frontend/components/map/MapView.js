@@ -368,8 +368,10 @@ export default function MapView({ initial = null }) {
   // "View on map" opens the photo's group on arrival.
   const [openHash, setOpenHash] = useState(initial?.hash || null);
   // Caption-inferred pins (geo_source "inferred") are lower-confidence, so they're
-  // hidden until the user opts in via the checkbox.
-  const [showInferred, setShowInferred] = useState(false);
+  // hidden until the user opts in via the checkbox — except when arriving from a
+  // "View on map" deep-link to an inferred photo, where we start with them shown
+  // so the target pin isn't filtered out on arrival.
+  const [showInferred, setShowInferred] = useState(Boolean(initial?.inferred));
   const favorites = useFavoritesMulti(results);
 
   const visibleResults = useMemo(

@@ -32,6 +32,9 @@ export default function MapPage() {
       lng,
       zoom: Number.isFinite(z) ? z : 16,
       hash: typeof router.query.hash === 'string' ? router.query.hash : null,
+      // "View on map" of a caption-inferred photo asks the map to show inferred
+      // pins, so the deep-linked photo isn't filtered out on arrival.
+      inferred: router.query.inferred === '1',
       img,
     };
   }, [router.query]);

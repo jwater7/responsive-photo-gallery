@@ -21,7 +21,17 @@ export default function ViewOnMapAction({ meta }) {
     e.stopPropagation();
     Router.push({
       pathname: '/map',
-      query: { lat: geo.lat, lng: geo.lng, z: 16, hash: meta.hash },
+      query: {
+        lat: geo.lat,
+        lng: geo.lng,
+        z: 16,
+        hash: meta.hash,
+        // A caption-inferred pin is hidden by the map's default `showInferred`
+        // filter, so without this the map would arrive centered on the photo but
+        // filter it back out (no pin). Flag it so the map turns the toggle on for
+        // this deep-link — the global default stays off.
+        ...(meta.geo_source === 'inferred' ? { inferred: 1 } : {}),
+      },
     });
   };
 
