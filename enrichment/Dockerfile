@@ -14,8 +14,15 @@ FROM node:24-slim
 
 WORKDIR /app
 
-# Native OCR engine + English data, ImageMagick for optional preprocessing,
-# and curl/unzip to fetch the offline GeoNames dataset below.
+# Native OCR engine + English data, and curl/unzip to fetch the offline GeoNames
+# dataset below.
+#
+# OCR preprocessing runs in-process via sharp (libvips), already bundled with the
+# npm deps (transformers uses it for CLIP) — so ImageMagick is no longer installed,
+# dropping its large Debian codec-CVE surface. To switch back to the legacy
+# ImageMagick `convert` backend (e.g. for BMP, which libvips can't decode, or to
+# revert a sharp regression), add `imagemagick` to the install list below and set
+# OCR_PREPROCESS_USE_MAGICK=true on the service.
 #
 # ffmpeg provides ffprobe, which the geo enricher uses to read a video's embedded
 # location + capture date (the QuickTime metadata atoms exifr can't reach). It is
@@ -25,7 +32,7 @@ WORKDIR /app
 # accepted because the enrichment plane is internal-only. Debian ships ffprobe
 # only inside the ffmpeg package, so there is no slimmer option.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      tesseract-ocr tesseract-ocr-eng imagemagick ffmpeg curl unzip ca-certificates \
+      tesseract-ocr tesseract-ocr-eng ffmpeg curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Bundle the higher-accuracy tessdata_best LSTM model for English (build-time

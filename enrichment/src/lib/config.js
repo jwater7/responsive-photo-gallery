@@ -20,6 +20,14 @@ module.exports = {
   ocrEngine: process.env.OCR_ENGINE || "native",
   ocrLang: process.env.OCR_LANG || "eng",
   ocrPreprocess: /^(1|true|yes)$/i.test(process.env.OCR_PREPROCESS || ""),
+  // Preprocess backend. Default is in-process sharp (libvips, already bundled for
+  // CLIP). Set OCR_PREPROCESS_USE_MAGICK=true to use the legacy ImageMagick
+  // `convert` path instead (requires `imagemagick` in the image; falls back to
+  // sharp if absent). Kept as an opt-in for parity/revert and BMP, which libvips
+  // can't decode.
+  ocrPreprocessUseMagick: /^(1|true|yes)$/i.test(
+    process.env.OCR_PREPROCESS_USE_MAGICK || ""
+  ),
   // Cap the OCR input resolution. Feeding Tesseract a full-res phone photo is
   // pathological: past ~2500px on the long edge its layout/LSTM cost explodes
   // (a 4032px image measured ~36 min vs <1s at 1500px). This is a SAFETY cap,
@@ -33,7 +41,7 @@ module.exports = {
   // matches the preprocess resize target so the two passes agree.
   ocrDownscaleMaxDim: intEnv("OCR_DOWNSCALE_MAX", 1500),
   // Hard wall-clock cap (ms) on a single Tesseract invocation, so a file that
-  // still lands past the cliff (downscale disabled, or `convert` failed and we
+  // still lands past the cliff (downscale disabled, or preprocess failed and we
   // fell back to the original) fails fast into `ocr_error` instead of pinning a
   // worker slot for tens of minutes. Derived: ~100x a normal 1500px OCR (~1-2s)
   // yet ~18x below the 36-min full-res blowup — never trips legitimate work,

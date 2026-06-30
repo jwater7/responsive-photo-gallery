@@ -53,6 +53,7 @@ function workerConfig() {
         entry("Min confidence (0-100)", "OCR_MIN_CONFIDENCE", c.ocrMinConfidence, 50),
         entry("Page segmentation (PSM)", "OCR_PSM", c.ocrPsm || "(Tesseract default 3)", "(Tesseract default 3)"),
         entry("Preprocess", "OCR_PREPROCESS", c.ocrPreprocess, false),
+        entry("Preprocess via ImageMagick", "OCR_PREPROCESS_USE_MAGICK", c.ocrPreprocessUseMagick, false),
         entry("Downscale input", "OCR_DOWNSCALE", c.ocrDownscale, true),
         entry("Downscale max (px)", "OCR_DOWNSCALE_MAX", c.ocrDownscaleMaxDim, 1500),
         entry("OCR timeout (ms)", "OCR_TIMEOUT_MS", c.ocrTimeoutMs, 120000),

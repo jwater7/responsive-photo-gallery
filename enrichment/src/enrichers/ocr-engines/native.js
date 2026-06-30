@@ -4,17 +4,25 @@
 /**
  * Native OCR engine: shells out to the `tesseract` binary (installed in the
  * container image). Uses TSV output so a single pass yields both text and a
- * per-word confidence. Optional ImageMagick preprocessing (grayscale +
- * normalize) when OCR_PREPROCESS is enabled.
+ * per-word confidence.
+ *
+ * Preprocess (downscale safety cap + optional grayscale/contrast quality pass)
+ * runs in-process via `sharp` (libvips) by default. The legacy ImageMagick
+ * `convert` path is kept behind OCR_PREPROCESS_USE_MAGICK for parity/revert and
+ * BMP (which libvips can't decode); see resolveBackend.
  */
 
-const { execFile } = require("child_process");
+const { execFile, execFileSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
+const sharp = require("sharp");
 
 const config = require("../../lib/config");
+
+const debugErr = require("debug")("responsive-photo-gallery:ocr:error");
+debugErr.enabled = true; // errors are always-on, not gated by DEBUG
 
 function execFileP(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
@@ -66,8 +74,9 @@ function parseTsv(tsv, minConfidence = 0) {
 }
 
 /**
- * Compose the ImageMagick args for the OCR preprocess pass. Two independent
- * transforms in one `convert` call:
+ * Compose the ImageMagick args for the OCR preprocess pass (legacy backend, used
+ * when OCR_PREPROCESS_USE_MAGICK is set). Two independent transforms in one
+ * `convert` call:
  *  - downscale (safety): cap the long edge at `maxDim`. `WxH>` shrinks ONLY when
  *    an image is larger (it never enlarges), so already-small images are left
  *    alone; this is what keeps a full-res phone photo from pushing Tesseract
@@ -89,12 +98,66 @@ function buildConvertArgs(absPath, tmp, { downscale, quality, maxDim }) {
 }
 
 /**
+ * Apply the same two transforms with sharp (libvips, in-process). Mirrors
+ * buildConvertArgs op-for-op and order (grayscale -> bounded downscale -> tonal):
+ *  - `fit:'inside' + withoutEnlargement` == IM's `WxH>` (shrink-only).
+ *  - `.grayscale()` == `-colorspace Gray`; `.normalize()` == `-auto-level
+ *    -contrast-stretch 1%x1%`; `.sharpen()` == `-sharpen 0x1`.
+ * Returns the sharp instance for chaining (kept pure for unit tests).
+ */
+function buildSharpPipeline(img, { downscale, quality, maxDim }) {
+  if (quality) img = img.grayscale();
+  if (downscale)
+    img = img.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true });
+  if (quality) img = img.normalize().sharpen();
+  return img;
+}
+
+/**
+ * Which preprocess backend to use. sharp is the default; ImageMagick only when
+ * explicitly opted in AND its binary is present — otherwise fall back to sharp
+ * so the safety downscale still happens (never silently drop to no-preprocess).
+ * Pure so the truth table is unit-testable.
+ */
+function resolveBackend(useMagick, haveMagick) {
+  return useMagick && haveMagick ? "magick" : "sharp";
+}
+
+function magickAvailable() {
+  try {
+    execFileSync("convert", ["-version"], { stdio: "ignore" });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Resolve once at load. The `convert` probe only runs when the opt-in is set, so
+// the default (sharp) path has no startup cost.
+const _haveMagick = config.ocrPreprocessUseMagick ? magickAvailable() : false;
+const PREPROCESS_BACKEND = resolveBackend(config.ocrPreprocessUseMagick, _haveMagick);
+if (config.ocrPreprocessUseMagick && !_haveMagick)
+  debugErr("OCR_PREPROCESS_USE_MAGICK set but ImageMagick not found; using sharp");
+
+async function preprocessMagick(absPath, tmp, opts) {
+  await execFileP("convert", buildConvertArgs(absPath, tmp, opts));
+}
+
+async function preprocessSharp(absPath, tmp, opts) {
+  // failOn:'none' keeps decode lenient on slightly-truncated images (IM was
+  // tolerant; sharp defaults stricter). A format libvips can't read (e.g. BMP)
+  // throws and the caller (recognize) falls back to the original.
+  await buildSharpPipeline(sharp(absPath, { failOn: "none" }), opts).png().toFile(tmp);
+}
+
+/**
  * Preprocess to a temp PNG for OCR. Caller cleans up. The downscale cap and the
  * quality pass are gated independently by the caller (see recognize).
  */
 async function preprocess(absPath, opts) {
   const tmp = path.join(os.tmpdir(), `ocr-${crypto.randomBytes(8).toString("hex")}.png`);
-  await execFileP("convert", buildConvertArgs(absPath, tmp, opts));
+  if (PREPROCESS_BACKEND === "magick") await preprocessMagick(absPath, tmp, opts);
+  else await preprocessSharp(absPath, tmp, opts);
   return tmp;
 }
 
@@ -140,4 +203,11 @@ async function recognize(absPath) {
   }
 }
 
-module.exports = { name: "native", recognize, parseTsv, buildConvertArgs };
+module.exports = {
+  name: "native",
+  recognize,
+  parseTsv,
+  buildConvertArgs,
+  buildSharpPipeline,
+  resolveBackend,
+};

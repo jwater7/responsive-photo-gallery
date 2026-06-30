@@ -21,6 +21,7 @@
     "meilisearch": "^0.58.0",
     "node-cron": "^4.4.1",
     "rpg-config": "*",
+    "sharp": "^0.34.5",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1"
   },
