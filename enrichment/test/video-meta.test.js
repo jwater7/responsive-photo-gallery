@@ -116,7 +116,9 @@ test("videoMeta: throws on an unprobeable file", { skip: !hasFfmpeg }, async () 
   const file = path.join(dir, "not-a-video.mp4");
   try {
     fs.writeFileSync(file, "this is not a video");
-    await assert.rejects(() => videoMeta(file));
+    // The throw must now carry ffprobe's real reason (folded from stderr), not a
+    // bare "Command failed" — that diagnostic is the whole point of `-v error`.
+    await assert.rejects(() => videoMeta(file), /Invalid data|error reading|moov atom|not found/i);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

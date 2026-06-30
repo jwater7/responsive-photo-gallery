@@ -82,12 +82,23 @@ function pickLocation(tags) {
 
 /** Run ffprobe and return the parsed JSON (throws on probe failure / bad JSON). */
 async function probe(absPath) {
-  const { stdout } = await execFileAsync(
-    "ffprobe",
-    ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", absPath],
-    { maxBuffer: 10 * 1024 * 1024 }
-  );
-  return JSON.parse(stdout);
+  try {
+    const { stdout } = await execFileAsync(
+      "ffprobe",
+      ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", absPath],
+      { maxBuffer: 10 * 1024 * 1024 }
+    );
+    return JSON.parse(stdout);
+  } catch (err) {
+    // `-v error` (vs the old `-v quiet`) keeps ffprobe's real reason on stderr;
+    // fold it into the thrown message so a probe failure is self-diagnosing —
+    // e.g. a damaged container ("contradictionary STSC and STCO / error reading
+    // header / Invalid data found") vs a transient fork ENOMEM under host memory
+    // pressure. Without this the caller only logs a bare "Command failed".
+    const reason = (err.stderr || "").toString().trim();
+    if (reason) err.message += `: ${reason}`;
+    throw err;
+  }
 }
 
 /**
