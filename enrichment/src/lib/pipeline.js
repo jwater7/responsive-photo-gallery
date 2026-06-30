@@ -57,13 +57,25 @@ function isCurrent(doc, enricher) {
 }
 
 /**
+ * Should this enricher be force-reprocessed regardless of `isCurrent`? `force` is
+ * `true` (all enrichers), a list of enricher names (just those), or falsy (none).
+ * Used by an admin "Force" scan to re-run a stage even on an up-to-date doc —
+ * e.g. to re-OCR a library after a preprocess change without bumping a version.
+ */
+function isForced(force, enricher) {
+  return force === true || (Array.isArray(force) && force.includes(enricher.name));
+}
+
+/**
  * Enrich one file: hash it, look up the existing doc, run each applicable
  * enricher whose output is missing, and write a single merged partial update.
  *
  * @param {{album: string, relPath: string, absPath: string}} file
+ * @param {{force?: boolean|string[]}} [opts] force-reprocess all enrichers
+ *        (`true`) or named ones (a list), bypassing the `isCurrent` skip.
  * @returns {Promise<{hash: string, ran: string[], skipped: string[], failed: string[]}>}
  */
-async function runFile(file) {
+async function runFile(file, { force = false } = {}) {
   await meili.init();
 
   const hash = await computeHash(file.absPath);
@@ -105,7 +117,8 @@ async function runFile(file) {
 
   for (const enricher of enrichers) {
     if (enricher.applies && !enricher.applies(file)) continue;
-    if (isCurrent(existing, enricher)) {
+    // A forced enricher re-runs even when up to date (admin "Force" scan).
+    if (!isForced(force, enricher) && isCurrent(existing, enricher)) {
       skipped.push(enricher.name);
       continue;
     }
@@ -151,4 +164,4 @@ async function runFile(file) {
   return { hash, ran, skipped, failed };
 }
 
-module.exports = { runFile, hasAllFields, isCurrent };
+module.exports = { runFile, hasAllFields, isCurrent, isForced };

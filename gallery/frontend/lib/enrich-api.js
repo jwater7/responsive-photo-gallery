@@ -77,11 +77,17 @@ export const getEnrichConfig = async () => {
 
 // Admin: trigger a (re)scan/enrichment pass. Non-blocking — returns immediately;
 // poll getEnrichStatus() to watch progress. `type` is "full" (default) or "delta".
-export const triggerEnrichmentSync = async (type = 'full') => {
+// Optional `force` (true | enricher-name list) re-runs enrichers on up-to-date
+// docs; optional `path` scopes the scan to an album / sub-folder / file.
+export const triggerEnrichmentSync = async (type = 'full', { force, path } = {}) => {
   const res = await fetch(prefix + '/enrichment-sync', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type }),
+    body: JSON.stringify({
+      type,
+      ...(force ? { force } : {}),
+      ...(path ? { path } : {}),
+    }),
   });
   if (!res.ok) throw new Error('enrichment-sync failed');
   return res.json();

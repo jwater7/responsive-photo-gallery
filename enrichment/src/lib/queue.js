@@ -48,23 +48,36 @@ function getControlQueue() {
  * Enqueue a control action (full/delta/reap) for the worker to execute. The
  * jobId is keyed by action so a rapid re-trigger of the same action dedupes to a
  * single pending job (the settled non-blocking contract); removeOnComplete frees
- * the id once the action finishes so it can be triggered again.
- * @param {{action: "full"|"delta"|"reap"}} ctrl
+ * the id once the action finishes so it can be triggered again. A SCOPED trigger
+ * (force and/or a path) gets a distinct jobId suffix so it neither dedupes into a
+ * plain scan nor collides with a differently-scoped one (jobIds may not contain
+ * ':').
+ * @param {{action: "full"|"delta"|"reap", force?: boolean|string[], path?: string|null}} ctrl
  */
-async function enqueueControl({ action }) {
-  return getControlQueue().add("control", { action }, {
-    jobId: `control_${action}`,
+async function enqueueControl({ action, force = false, path = null }) {
+  const scope = force || path ? `_${scopeTag(force, path)}` : "";
+  return getControlQueue().add("control", { action, force, path }, {
+    jobId: `control_${action}${scope}`,
     removeOnComplete: true,
     removeOnFail: 100,
   });
 }
 
+/** Stable, ':'-free jobId fragment describing a scoped trigger. */
+function scopeTag(force, path) {
+  const f = force === true ? "all" : Array.isArray(force) ? force.join("-") : "";
+  return `${f}@${path || ""}`.replace(/:/g, "_");
+}
+
 /**
  * Enqueue a file for enrichment.
  * @param {{album: string, relPath: string, absPath: string}} file
+ * @param {boolean|string[]} [force] forwarded to the pipeline to bypass the
+ *        up-to-date skip for all (`true`) or named enrichers.
  */
-async function enqueueFile(file) {
-  return getQueue().add("enrich", file, {
+async function enqueueFile(file, force = false) {
+  const data = force ? { ...file, force } : file;
+  return getQueue().add("enrich", data, {
     // BullMQ job IDs may not contain ':'. Dedupes concurrent re-enqueues of the
     // same pending file.
     jobId: `file_${file.relPath.replace(/:/g, "_")}`,

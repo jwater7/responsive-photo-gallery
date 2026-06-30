@@ -9,6 +9,7 @@ const scanState = require("../lib/scan-state");
 const configView = require("../lib/config-view");
 const reconcile = require("../lib/reconcile");
 const queue = require("../lib/queue");
+const enrichers = require("../enrichers");
 const config = require("../lib/config");
 const embedder = require("../lib/embedder");
 const geonames = require("../lib/geonames");
@@ -144,25 +145,59 @@ router.post("/search", async (req, res) => {
  *       and enqueues only new/changed files — the cheap recurring pass (the daily
  *       cron uses this). Poll GET /status for progress. Returns "running" if a
  *       reconcile enqueue is already underway.
+ *
+ *       Optional `force` re-runs enrichers even on up-to-date docs (bypasses the
+ *       version/up-to-date skip): `true` for all enrichers, or a list of enricher
+ *       names (e.g. ["ocr"]). Optional `path` scopes the scan to one album,
+ *       sub-folder, or file (a relative path prefix). Forcing implies a full
+ *       enqueue of the in-scope files.
  *     produces: application/json
  *     responses:
  *       200: { description: Reconcile started or already running }
- *       400: { description: Invalid type }
+ *       400: { description: Invalid type, force, or path }
  */
 router.post("/enrichment-sync", async (req, res) => {
-  const type = (req.body && req.body.type) || "full";
+  const body = req.body || {};
+  const type = body.type || "full";
   if (!["full", "delta"].includes(type)) {
     return res.status(400).json({
       error: { code: 400, message: 'Invalid type. Use "full" or "delta"' },
     });
   }
 
-  const { started, status } = await reconcile.triggerReconcile(type);
+  // force: false (default), true (all enrichers), or a list of known names.
+  const force = body.force;
+  if (force !== undefined && force !== false && force !== true) {
+    const names = enrichers.map((e) => e.name);
+    if (!Array.isArray(force) || !force.every((n) => names.includes(n))) {
+      return res.status(400).json({
+        error: {
+          code: 400,
+          message: `Invalid force. Use true or a list of enricher names: ${names.join(", ")}`,
+        },
+      });
+    }
+  }
+
+  // path: optional relative path scope (album / sub-folder / file).
+  const pathScope = body.path;
+  if (pathScope !== undefined && typeof pathScope !== "string") {
+    return res.status(400).json({
+      error: { code: 400, message: "Invalid path. Use a relative path string." },
+    });
+  }
+
+  const { started, status } = await reconcile.triggerReconcile(type, {
+    force: force || false,
+    path: pathScope || null,
+  });
+  const scopeLabel = pathScope ? ` of "${pathScope}"` : "";
+  const forceLabel = force === true ? " (force: all)" : Array.isArray(force) ? ` (force: ${force.join(", ")})` : "";
   return res.status(200).json({
     status,
     type,
     message: started
-      ? `${type === "delta" ? "Delta" : "Full"} scan started`
+      ? `${type === "delta" ? "Delta" : "Full"} scan${scopeLabel} started${forceLabel}`
       : "Reconcile already in progress",
   });
 });

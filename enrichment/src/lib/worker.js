@@ -41,7 +41,7 @@ function startWorker() {
 
   // Pass connection options (not a shared instance) so BullMQ owns and
   // error-handles its own blocking client instead of leaking raw ioredis errors.
-  worker = new Worker(QUEUE_NAME, (job) => pipeline.runFile(job.data), {
+  worker = new Worker(QUEUE_NAME, (job) => pipeline.runFile(job.data, { force: job.data.force }), {
     connection: { url: config.redisUrl, maxRetriesPerRequest: null },
     concurrency: config.workerConcurrency,
   });
@@ -71,10 +71,14 @@ function startWorker() {
 function startControlWorker() {
   if (controlWorker) return controlWorker;
 
-  controlWorker = new Worker(CONTROL_QUEUE_NAME, (job) => reconcile.runControl(job.data.action), {
-    connection: { url: config.redisUrl, maxRetriesPerRequest: null },
-    concurrency: 1,
-  });
+  controlWorker = new Worker(
+    CONTROL_QUEUE_NAME,
+    (job) => reconcile.runControl(job.data.action, { force: job.data.force, path: job.data.path }),
+    {
+      connection: { url: config.redisUrl, maxRetriesPerRequest: null },
+      concurrency: 1,
+    }
+  );
 
   controlWorker.on("completed", (job) => debug("control done: %s", job.data && job.data.action));
   controlWorker.on("failed", (job, err) => {

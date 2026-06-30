@@ -15,6 +15,7 @@ const meili = require("./meili");
 const { fileSize, fileMtime } = require("./hash");
 const { enqueueFile, enqueueControl, queueStats } = require("./queue");
 const scanState = require("./scan-state");
+const { normalize, isExcluded } = require("rpg-config");
 
 const debug = require("debug")("responsive-photo-gallery:reconcile");
 const debugErr = require("debug")("responsive-photo-gallery:reconcile:error");
@@ -42,14 +43,24 @@ function fileUnchanged(absPath, entries) {
  *   for). If the index can't be read, it falls back to a full enqueue rather
  *   than silently skipping everything.
  */
-async function enqueueAll(type = "full") {
+async function enqueueAll(type = "full", { force = false, path = null } = {}) {
   // New scan session: zero the per-session progress totals (the live `active`
   // gauge and last-completion time are preserved).
   await scanState.reset();
-  const files = walkDir(config.imagePath);
 
+  // Optional path scope (album / subtree / single file): reuse the excludes
+  // directory-prefix matcher to keep only in-scope files. normalize canonicalizes
+  // to the stored POSIX form and strips any '.'/'..' so it can't traverse.
+  const scopePath = path ? normalize([path])[0] || null : null;
+  let files = walkDir(config.imagePath);
+  if (scopePath) files = files.filter((f) => isExcluded(f.relPath, [scopePath]));
+
+  // The delta pre-filter skips up-to-date files BEFORE they reach the pipeline
+  // (where the force bypass lives), so a forced scan must enqueue every in-scope
+  // file regardless of stat.
+  const statGated = type === "delta" && !force;
   let known = null;
-  if (type === "delta") {
+  if (statGated) {
     try {
       known = await meili.allDocStats();
     } catch (err) {
@@ -68,15 +79,22 @@ async function enqueueAll(type = "full") {
         continue;
       }
     }
-    await enqueueFile(file); // throws if the broker is down -> surfaced to caller
+    await enqueueFile(file, force); // throws if the broker is down -> surfaced to caller
     enqueued++;
   }
 
-  await scanState.setLastScan({ type, enqueued, skipped, at: new Date().toISOString() });
-  if (type === "delta") {
+  await scanState.setLastScan({
+    type,
+    force,
+    path: scopePath,
+    enqueued,
+    skipped,
+    at: new Date().toISOString(),
+  });
+  if (statGated) {
     debug("delta enqueue: %d new/changed, %d unchanged skipped", enqueued, skipped);
   } else {
-    debug("full enqueue: %d files", enqueued);
+    debug("%s enqueue: %d files%s", type, enqueued, scopePath ? ` (scope: ${scopePath})` : "");
   }
   return enqueued;
 }
@@ -88,11 +106,11 @@ async function enqueueAll(type = "full") {
  * the API event loop never does the scan. `type` is "full" (re-hash everything)
  * or "delta" (stat-gated; the cron default).
  */
-async function triggerReconcile(type = "full") {
+async function triggerReconcile(type = "full", { force = false, path = null } = {}) {
   // Best-effort "already running" report for the user; the real mutual exclusion
   // is the control queue's per-action jobId dedup + the consumer's concurrency-1.
   if (await scanState.getFlag("isEnqueuing")) return { started: false, status: "running" };
-  await enqueueControl({ action: type });
+  await enqueueControl({ action: type, force, path });
   return { started: true, status: "started" };
 }
 
@@ -107,7 +125,7 @@ function setNextReconcile(iso) {
  * the control consumer is concurrency-1, and the isEnqueuing/isReaping flag is set
  * here for the duration so GET /status reports it across the process boundary.
  */
-async function runControl(action) {
+async function runControl(action, { force = false, path = null } = {}) {
   if (action === "reap") {
     await scanState.setReaping(true);
     try {
@@ -119,7 +137,7 @@ async function runControl(action) {
   }
   await scanState.setEnqueuing(true);
   try {
-    await enqueueAll(action);
+    await enqueueAll(action, { force, path });
   } finally {
     await scanState.setEnqueuing(false);
   }
