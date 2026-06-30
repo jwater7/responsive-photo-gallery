@@ -85,7 +85,7 @@ function clusterIcon(count) {
 }
 
 // Tracks the map viewport and (debounced) queries the API for the visible area.
-function ViewportSearch({ query, onResults }) {
+function ViewportSearch({ query, excludeInferred, onResults }) {
   const map = useMap();
   const timer = useRef(null);
 
@@ -104,10 +104,13 @@ function ViewportSearch({ query, onResults }) {
       semanticRatio: 0,
     };
     if (query) body.query = query;
+    // Exclude inferred pins server-side so the 500 limit isn't spent on pins the
+    // user is hiding (a dense area could otherwise return only a few real ones).
+    if (excludeInferred) body.excludeInferred = true;
     geoSearch(body)
       .then((r) => onResults(r.results || []))
       .catch(() => onResults([]));
-  }, [map, query, onResults]);
+  }, [map, query, excludeInferred, onResults]);
 
   useMapEvents({
     moveend: () => {
@@ -490,7 +493,12 @@ export default function MapView({ initial = null }) {
           maxZoom={MAP_MAX_ZOOM}
           maxNativeZoom={TILE_MAX_NATIVE_ZOOM}
         />
-        <ViewportSearch key={query} query={query} onResults={setResults} />
+        <ViewportSearch
+          key={query}
+          query={query}
+          excludeInferred={!showInferred}
+          onResults={setResults}
+        />
         <Markers index={index} onOpen={openImage} openHash={openHash} setOpenHash={setOpenHash} />
       </MapContainer>
 

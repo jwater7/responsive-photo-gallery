@@ -68,6 +68,10 @@ router.post("/search", async (req, res) => {
   }
   if (body.takenAfter) filters.push(`taken_at >= "${body.takenAfter}"`);
   if (body.takenBefore) filters.push(`taken_at <= "${body.takenBefore}"`);
+  // Map opt-out of the lower-confidence caption-inferred pins. Filtering here (not
+  // client-side) keeps the `limit` budget on real pins. All bbox-matched docs
+  // have a geo_source, so `!=` doesn't need a missing-field guard.
+  if (body.excludeInferred) filters.push('geo_source != "inferred"');
   if (filters.length) opts.filter = filters;
 
   // Optional relevance cutoff (0..1). Semantic/hybrid ranks every document, so

@@ -41,6 +41,10 @@ async function init() {
     await c.index(INDEX_NAME).updateSettings({
       filterableAttributes: [
         "_geo", "album", "tags", "place_city", "place_country", "taken_at",
+        // Source of a doc's location, so the map can exclude the lower-confidence
+        // caption-inferred pins server-side (the `limit` then applies to the
+        // non-inferred set, not a viewport's first 500 mixed pins).
+        "geo_source",
         // Per-stage failure markers, so the "broken enrichments" list is
         // queryable, e.g. filter `ocr_error IS NOT NULL`. See TODO Enrichment #9.
         "ocr_error", "visual_error", "geo_error", "caption_error",
