@@ -1,7 +1,6 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 import dynamic from 'next/dynamic';
-import { useMemo } from 'react';
-import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
 import { Breadcrumb } from 'react-bootstrap';
 
 import { usePing } from '../data/use-ping';
@@ -15,34 +14,45 @@ const MapView = dynamic(() => import('../components/map/MapView'), {
 
 export default function MapPage() {
   const { loggedIn, isLoading: isPingLoading, features } = usePing({ redirect: '/' });
-  const router = useRouter();
 
   // Optional deep-link: /map?lat=..&lng=..&z=..&hash=.. opens the map focused on
   // one photo (e.g. the lightbox "View on map" action). `img` (an image hash)
   // additionally reopens the lightbox on that photo — so a refresh while viewing
   // an image restores it. null = default world view.
-  const initial = useMemo(() => {
-    const img = typeof router.query.img === 'string' ? router.query.img : null;
-    const lat = parseFloat(router.query.lat);
-    const lng = parseFloat(router.query.lng);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return img ? { img } : null;
-    const z = parseInt(router.query.z, 10);
-    return {
+  //
+  // Parsed from window.location once on mount, NOT from router.query: in the
+  // static export (output: 'export'), a hard load / shared link flips
+  // router.isReady true while router.query is still empty, so a deep-link mounted
+  // the map at the default world view (Leaflet reads center/zoom once at mount,
+  // so it never re-focused). window.location.search is the ground truth on the
+  // client. `undefined` = not parsed yet (don't mount the map); `null` = parsed,
+  // no deep-link (world view).
+  const [initial, setInitial] = useState(undefined);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const img = p.get('img');
+    const lat = parseFloat(p.get('lat'));
+    const lng = parseFloat(p.get('lng'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setInitial(img ? { img } : null);
+      return;
+    }
+    const z = parseInt(p.get('z'), 10);
+    setInitial({
       lat,
       lng,
       zoom: Number.isFinite(z) ? z : 16,
-      hash: typeof router.query.hash === 'string' ? router.query.hash : null,
+      hash: p.get('hash') || null,
       // "View on map" of a caption-inferred photo asks the map to show inferred
       // pins, so the deep-linked photo isn't filtered out on arrival.
-      inferred: router.query.inferred === '1',
-      img,
-    };
-  }, [router.query]);
+      inferred: p.get('inferred') === '1',
+      img: img || null,
+    });
+  }, []);
 
-  // Leaflet reads center/zoom once at mount, so wait for the router to parse the
-  // query before mounting MapView — otherwise a deep-link opens at the default
-  // view on a cold load.
-  if (isPingLoading || !router.isReady) return <></>;
+  // Wait for the deep-link parse (initial !== undefined) before mounting MapView,
+  // so Leaflet's one-shot center/zoom read sees the focused view, not the default.
+  if (isPingLoading || initial === undefined) return <></>;
   if (!loggedIn) return <>Redirecting...</>;
 
   if (!features.map) {
