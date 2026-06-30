@@ -364,11 +364,19 @@ export default function MapView({ initial = null }) {
   // disappearing when the points re-cluster. Seeded from a deep-link `hash` so
   // "View on map" opens the photo's group on arrival.
   const [openHash, setOpenHash] = useState(initial?.hash || null);
+  // Caption-inferred pins (geo_source "inferred") are lower-confidence, so they're
+  // hidden until the user opts in via the checkbox.
+  const [showInferred, setShowInferred] = useState(false);
   const favorites = useFavoritesMulti(results);
+
+  const visibleResults = useMemo(
+    () => (showInferred ? results : results.filter((r) => r.geo_source !== 'inferred')),
+    [results, showInferred]
+  );
 
   // One clustering for the markers (a colocated cluster renders its group in a
   // popup bound to its marker; the open group's popup follows it across zoom).
-  const index = useMemo(() => buildIndex(results), [results]);
+  const index = useMemo(() => buildIndex(visibleResults), [visibleResults]);
 
   // Reflect the open image in the URL (replaceState, so no history push / router
   // re-trigger) so a refresh restores it. Also pins the slide's coords so the
@@ -434,6 +442,32 @@ export default function MapView({ initial = null }) {
           Search
         </button>
       </form>
+
+      <label
+        style={{
+          position: 'absolute',
+          zIndex: 1000,
+          top: 48,
+          left: 60,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '4px 8px',
+          borderRadius: 6,
+          border: '1px solid #ccc',
+          background: 'rgba(255,255,255,0.92)',
+          fontSize: 13,
+          cursor: 'pointer',
+        }}
+        title="Show photos whose location was inferred from their caption text (lower confidence)."
+      >
+        <input
+          type="checkbox"
+          checked={showInferred}
+          onChange={(e) => setShowInferred(e.target.checked)}
+        />
+        Show inferred locations
+      </label>
 
       <MapContainer
         center={initial && Number.isFinite(initial.lat) ? [initial.lat, initial.lng] : [20, 0]}

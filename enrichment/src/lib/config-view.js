@@ -73,6 +73,12 @@ function workerConfig() {
       ],
     },
     {
+      category: "Geo",
+      items: [
+        entry("Infer location from caption", "GEO_INFER_FROM_CAPTION", c.geoInferFromCaption, true),
+      ],
+    },
+    {
       category: "Scanning & watcher",
       items: [
         entry("Watcher enabled", "WATCH_ENABLED", c.watchEnabled, true),

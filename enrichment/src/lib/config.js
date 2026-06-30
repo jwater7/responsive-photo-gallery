@@ -93,6 +93,10 @@ module.exports = {
   geonamesCitiesPath: process.env.GEONAMES_CITIES || "/data/geonames/cities15000.txt",
   geonamesAdmin1Path: process.env.GEONAMES_ADMIN1 || "/data/geonames/admin1CodesASCII.txt",
   geonamesCountryPath: process.env.GEONAMES_COUNTRY || "/data/geonames/countryInfo.txt",
+  // Forward-geocode a photo's embedded caption to a map pin (geo_source
+  // "inferred") when it has no GPS. On by default; OCR_-style off switch since
+  // it's best-effort (cities only) and an operator may not want inferred pins.
+  geoInferFromCaption: !/^(0|false|no|off)$/i.test(process.env.GEO_INFER_FROM_CAPTION || ""),
 
   // Realtime filesystem watcher. Enabled by default; set WATCH_ENABLED=false to
   // turn it off and rely solely on the periodic reconcile (e.g. on hosts where

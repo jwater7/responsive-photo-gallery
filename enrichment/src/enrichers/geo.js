@@ -18,14 +18,17 @@
  *   _geo        ({ lat, lng })            - when GPS is present
  *   place / place_city / place_country    - reverse-geocoded text (searchable)
  *   taken_at    (ISO 8601)                - capture date
- *   geo_source  ("exif" image | "quicktime" video) - precedence:
- *                                           manual > exif | quicktime > inferred
+ *   geo_source  ("exif" image | "quicktime" video | "inferred" caption text) -
+ *                                           precedence: manual > exif | quicktime
+ *                                           > inferred (forward-geocoded caption)
  *   duration / width / height             - video only
  */
 
 const exifr = require("exifr");
 
+const config = require("../lib/config");
 const geonames = require("../lib/geonames");
+const { pickCaption } = require("../lib/caption-text");
 const { videoMeta } = require("../lib/video-meta");
 const { VIDEO_FORMAT_REGEXP, MEDIA_FORMAT_REGEXP } = require("../lib/walk-dir");
 
@@ -34,17 +37,37 @@ debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/se
 
 const isVideo = (relPath) => VIDEO_FORMAT_REGEXP.test(relPath);
 
+/** Write the searchable place hierarchy ({ city, region, country }) onto `out`. */
+function setPlace(out, place) {
+  if (!place) return;
+  out.place = [place.city, place.region, place.country].filter(Boolean).join(", ");
+  out.place_city = place.city;
+  out.place_country = place.country;
+}
+
 /** Reverse-geocode coordinates into the searchable place hierarchy (offline). */
 function reverseGeocode(out, lat, lng) {
-  const place = geonames.reverse(lat, lng);
-  if (place) {
-    out.place = [place.city, place.region, place.country].filter(Boolean).join(", ");
-    out.place_city = place.city;
-    out.place_country = place.country;
+  setPlace(out, geonames.reverse(lat, lng));
+}
+
+/**
+ * Fallback when an image has no GPS: forward-geocode the embedded caption's place
+ * text (offline, cities only) and pin it as the lowest-precedence `inferred`
+ * source. Gated by GEO_INFER_FROM_CAPTION; never overrides a real GPS fix.
+ */
+async function inferFromCaption(out, absPath) {
+  if (out._geo || !config.geoInferFromCaption) return;
+  const meta = await exifr.parse(absPath, { iptc: true, xmp: true, ifd0: true }).catch(() => null);
+  const caption = pickCaption(meta);
+  const hit = caption && geonames.forward(caption);
+  if (hit) {
+    out._geo = { lat: hit.lat, lng: hit.lng };
+    out.geo_source = "inferred";
+    setPlace(out, hit);
   }
 }
 
-/** Image path: EXIF GPS + DateTimeOriginal via exifr. */
+/** Image path: EXIF GPS + DateTimeOriginal via exifr; caption inference if no GPS. */
 async function enrichImage(out, absPath) {
   const gps = await exifr.gps(absPath).catch(() => null);
   if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)) {
@@ -57,6 +80,8 @@ async function enrichImage(out, absPath) {
   if (meta && meta.DateTimeOriginal) {
     out.taken_at = new Date(meta.DateTimeOriginal).toISOString();
   }
+
+  await inferFromCaption(out, absPath);
 }
 
 /** Video path: QuickTime location + creation date + duration/dims via ffprobe. */
@@ -75,7 +100,7 @@ async function enrichVideo(out, absPath) {
 
 module.exports = {
   name: "geo",
-  version: 1, // bump when output-producing logic changes (forces regen on full scan)
+  version: 2, // bump when output-producing logic changes (forces regen on full scan)
   outputFields: ["geo_checked"],
   applies: (file) => MEDIA_FORMAT_REGEXP.test(file.relPath),
   async enrich({ file, absPath, existing }) {
