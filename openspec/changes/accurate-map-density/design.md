@@ -126,6 +126,19 @@ Force (stage geo) is the on-demand equivalent. The bump is mandatory, not
 optional — skipping it is exactly how the IM→sharp OCR migration left old docs on
 stale OCR until someone forced them.
 
+### D9 — Fine resolutions at near zoom (revised during implementation)
+Verification exposed that a single fixed cell size fails at max zoom: a res-8
+cell (~461 m) is wider than a zoom-19 viewport, so its center falls off-screen
+("the pile disappears") and a loner ~460 m from a pile shares the cell and lumps
+into it. **Client Supercluster on the near-zoom fetch was tried and rejected** —
+the fetch is capped at 500, so it undercounts a >500 pile (shows "500", not the
+true count) and can miss coverage. The fix is to keep the server-density model but
+**persist finer resolutions (r1→r11)** and map high zoom to fine cells. Then the
+facet still gives the true, uncapped count even for a 10k+ pile; a nearby loner
+lands in its own fine cell (separates); and a ~25 m cell's center is on-screen.
+Verified: a 1000-pile + close outliers → the pile cell reports 999 (not 500) and
+the outliers are distinct cells. Deep-links also now honor the URL `z`.
+
 ## Risks / Trade-offs
 
 - **Grid artifacts at mid zoom (circles snap to cells)** → The zoom ladder (D4)
@@ -149,9 +162,11 @@ stale OCR until someone forced them.
 
 ## Migration Plan
 
-1. Ship enrichment image: geo enricher computes H3 ids; Meili settings add cell-id
+1. Ship enrichment: geo enricher computes H3 ids; Meili settings add cell-id
    fields (filterable + faceting, raised `maxValuesPerFacet`); density endpoint
-   live.
+   live. GOTCHA: the indexer and worker are **separate images** — rebuild BOTH,
+   or the worker keeps running old enricher code (hit locally: cells stayed at
+   res 8 / geo v3 until the worker image was rebuilt too).
 2. Backfill: with the geo `version` bumped (D8), trigger a **full** scan (or admin
    Force, stage geo) so existing geo docs regenerate with H3 ids; verify cell
    counts via a multi-search / facet sanity query (dense home cell ≈ 18,732; sum ≈

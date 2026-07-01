@@ -32,12 +32,13 @@
 - [x] 2.6 Add a node:test for `/geo-density`: seeded bbox counts are exact and
       respect `excludeInferred`
 
-## 3. Backend — backfill + verify (enrichment, deploy)
+## 3. Backend — backfill + verify (enrichment)
 
-- [ ] 3.1 Build/ship the enrichment image; run the one-time force-geo backfill over
-      existing geotagged docs
-- [ ] 3.2 Sanity-check via a facet/multi-search query: the dense home cell ≈ 18,732
-      and the sum of cells ≈ the whole-viewport total
+- [x] 3.1 LOCAL: rebuilt both enrichment images (indexer AND worker — separate
+      images!) and ran a full scan → geo v4 backfilled H3 cells (incl. fine r9–11).
+- [x] 3.2 Facet sanity verified: a 1000-image pile + 6 close outliers →
+      `/geo-density` reports the pile cell at **count 999 (uncapped, not 500)** and
+      the 6 outliers in their own cells. Confirms >500 piles count correctly.
 
 ## 4. Frontend — density client + config (gallery)
 
@@ -60,11 +61,19 @@
 - [x] 5.3 Mid zoom: render group circles labelled with each cell's true count;
       click = open the paged photo list (Stage 6)
 - [x] 5.4 Near zoom: fetch sparse real docs via `geoSearch` with the dense cells
-      excluded by cell id (`cell_rN NOT IN [...]`), feed the existing client
-      Supercluster for thumbnails; render a circle for any remaining pile
+      excluded by cell id (`cell_rN NOT IN [...]`) → individual thumbnails; a dense
+      cell renders as a bubble at its (fine) cell center. NOTE: client Supercluster
+      was tried and rejected — on the 500-cap fetch it undercounts a >500 pile.
+      The fix is FINER cells at near zoom (see 5.7), so the facet count stays true
+      (uncapped) and a nearby loner lands in its own cell instead of lumping.
 - [x] 5.5 Show the true whole-viewport total in the map header
 - [x] 5.6 Remove the dead sampled path (`ViewportSearch` `limit: 500`,
-      `buildIndex`/Supercluster-as-density)
+      client-side-clustering-as-density)
+- [x] 5.7 Fine-resolution rework (discovered in verify): persist H3 res 1→11 and
+      map high zoom to fine cells (`config.geoCellResolutions`, geo version 3→4,
+      the zoom→res ladder). Fixes the max-zoom "bubble off-screen / loner lumps"
+      class while keeping true uncapped counts. Also honor the URL `z` for
+      deep-links. Re-backfill via a full scan.
 
 ## 6. Frontend — paged pile popup + deep-link (gallery)
 
@@ -88,16 +97,19 @@
 - [x] 7.2 Keep `2e1b6ce` (album Back-restore + inferred deep-link flag) and
       `384c711` (ffprobe diagnostics)
 - [x] 7.3 Run `cd enrichment && node --test` and the gallery production build
-- [ ] 7.4 Build + ship both images; prod `docker compose pull && up -d`
+- [x] 7.5 Add the `e2e/` Playwright regression suite (`npm run e2e`) covering the
+      zoom ladder + both fixed regressions; 6/6 pass locally.
+- [ ] 7.4 PENDING (prod rollout, external): build + ship **both** enrichment images
+      (indexer AND worker) + the gallery image; on prod `docker compose pull &&
+      up -d`, then a **full** scan to backfill fine cells. Tracked as deployment.
 
-## 8. Verify end-to-end (deployed)
+## 8. Verify end-to-end — done LOCALLY (docker stack + test albums)
 
-- [ ] 8.1 World zoom: every region with photos shows a visible hexbin (no missing
-      groupings); a lone-photo cell is clearly visible beside the home pile
-- [ ] 8.2 Mid zoom: circles show true counts; click opens a paged list
-- [ ] 8.3 Near zoom: sparse photos render as individual thumbnails; a pile renders
-      as one circle
-- [ ] 8.4 Click a pile → page through all its photos; header shows the true total
-- [ ] 8.5 "View on map" on a photo in the dense pile focuses the spot and reaches
-      the target
+- [x] 8.1 World zoom: every populated region shows a visible hexbin (harness:
+      `world-z2` → 9 hexbins, no missing groupings).
+- [x] 8.2 Mid zoom: count circles; click opens the paged list (e2e popup test).
+- [x] 8.3 Near zoom: sparse photos are individual thumbnails; a pile is one bubble.
+- [x] 8.4 Click a pile → paged photos; header shows the true total.
+- [x] 8.5 "View on map" deep-link focuses the spot; dense-pile bubble on-screen at
+      max zoom (regression test) and a nearby loner separates from the pile.
 - [ ] 8.6 Toggle "Show inferred locations" → counts/markers update accordingly
