@@ -1,69 +1,54 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
-// Leaflet map of geotagged photos. The viewport IS the query: panning/zooming
-// re-queries the enrichment API by bounding box and re-clusters. Markers are
-// read-only photo thumbnails; clicking one opens the full image in a lightbox.
+// Leaflet map of geotagged photos, rendered from SERVER-SIDE density (true counts
+// per H3 cell), never a client sample. Representation follows zoom:
+//   far  → hexbins colored by count (click = zoom in)
+//   mid  → count circles           (click = open the cell's paged photo list)
+//   near → individual thumbnails + a circle for any dense cell
+// See map-config.js for the thresholds / resolution ladder / color buckets.
 //
 // Client-only (dynamically imported with ssr:false from pages/map.js).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polygon, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import Supercluster from 'supercluster';
 import 'leaflet/dist/leaflet.css';
 import Video from 'yet-another-react-lightbox/plugins/video';
-import { geoSearch } from '../../lib/enrich-api';
+
+import { geoDensity, geoSearch } from '../../lib/enrich-api';
 import { imageurl } from '../../lib/api';
 import { imageRef } from '../../lib/image-ref';
 import { docToSlide } from '../../lib/slide';
 import { useFavoritesMulti } from '../../data/use-favorites';
 import MetaLightbox from '../MetaLightbox';
+import CellPhotos, { CELL_POPUP_WIDTH } from './CellPhotos';
+import {
+  DEEP_LINK_ZOOM,
+  CELL_THUMB_LIMIT,
+  NEAR_SPARSE_LIMIT,
+  resolutionForZoom,
+  modeForZoom,
+  bucketColor,
+  ringBounds,
+  pointInRing,
+} from './map-config';
 
-const THUMB = '64x64';
-// The pixel edge the THUMB renders at — the unit the cluster popup grid sizes
-// from, so the popup dimensions track the thumbnail size instead of being magic.
-const THUMB_PX = Number(THUMB.split('x')[0]);
-
-// Edge length (px) of a photo thumb marker, hoisted out of thumbIcon so the
-// icon size lives in one place.
-const MARKER_SIZE = 48;
-
-// Size of the cluster ("N photos here") popup, derived from the thumbnail grid:
-// COLS thumbnails wide and up to ROWS tall before it scrolls. Bump COLS/ROWS to
-// enlarge it (Leaflet's popup `maxWidth` is raised to match, since its 300px
-// default would otherwise clamp the content).
-const CLUSTER_POPUP_GAP = 4;
-const CLUSTER_POPUP_COLS = 4;
-const CLUSTER_POPUP_ROWS = 5;
-const CLUSTER_POPUP_W =
-  CLUSTER_POPUP_COLS * THUMB_PX + (CLUSTER_POPUP_COLS - 1) * CLUSTER_POPUP_GAP;
-const CLUSTER_POPUP_MAXH =
-  CLUSTER_POPUP_ROWS * THUMB_PX + (CLUSTER_POPUP_ROWS - 1) * CLUSTER_POPUP_GAP;
-
-// OpenStreetMap serves tiles natively up to zoom 19 (a property of the tile
-// source, not a tuned value); past that tiles only upscale, so that's our map
-// ceiling. Clustering stays active all the way to that ceiling: points too
-// close to separate even at the deepest zoom then remain a single *clickable*
-// cluster (which opens the photo list) instead of dissolving into a pile of
-// unclickable, exactly-stacked individual markers.
+// OSM serves tiles natively to zoom 19; past that they only upscale.
 const TILE_MAX_NATIVE_ZOOM = 19;
-const MAP_MAX_ZOOM = TILE_MAX_NATIVE_ZOOM;
-const CLUSTER_MAX_ZOOM = MAP_MAX_ZOOM;
+const MAP_MAX_ZOOM = 19;
+const MARKER_SIZE = 44;
 
-// Leaflet hands back map bounds that can run past the valid lat/lng range when
-// zoomed out (e.g. lng < -180 at world zoom). MeiliSearch rejects an
-// out-of-range _geoBoundingBox, so clamp before querying or clustering.
+// Leaflet bounds can run past valid lat/lng when zoomed out; MeiliSearch rejects
+// an out-of-range _geoBoundingBox, so clamp before querying.
 const clampLat = (v) => Math.max(-90, Math.min(90, v));
 const clampLng = (v) => Math.max(-180, Math.min(180, v));
 
-function thumbFor(doc, size = THUMB) {
-  const ref = imageRef(doc);
-  return ref ? imageurl({ ...ref, thumb: size }) : null;
-}
+const fmt = (n) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : String(n));
 
-// Lightbox slide from an enrichment doc — shared with search via lib/slide
-// (video docs become fully-buffered Video slides; see MetaLightbox/BufferedVideo).
-const toSlide = docToSlide;
+function thumbFor(doc) {
+  const ref = imageRef(doc);
+  return ref ? imageurl({ ...ref, thumb: '64x64' }) : null;
+}
 
 function thumbIcon(doc) {
   const url = thumbFor(doc);
@@ -74,359 +59,173 @@ function thumbIcon(doc) {
   return L.divIcon({ html: inner, className: 'rpg-photo-marker', iconSize: [MARKER_SIZE, MARKER_SIZE], iconAnchor: [half, half] });
 }
 
-function clusterIcon(count) {
-  const size = count < 10 ? 36 : count < 100 ? 44 : 52;
+// A count "bubble" for a cell, colored by the same log buckets as the hexbins.
+function countIcon(count) {
+  const size = count < 10 ? 34 : count < 100 ? 42 : count < 1000 ? 50 : 58;
+  const color = bucketColor(count);
   return L.divIcon({
-    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#2b8cff;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)">${count}</div>`,
-    className: 'rpg-cluster-marker',
+    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);font-size:12px">${fmt(count)}</div>`,
+    className: 'rpg-cell-marker',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
 }
 
-// Tracks the map viewport and (debounced) queries the API for the visible area.
-function ViewportSearch({ query, excludeInferred, onResults }) {
+// Density + rendering. Lives inside MapContainer so it has the live map (bounds,
+// zoom, click-to-zoom). Refetches (debounced) on move and when the query or the
+// inferred filter changes.
+function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }) {
   const map = useMap();
+  const [layer, setLayer] = useState({ mode: 'circle', resolution: 8, cells: [], denseCells: [], sparseDocs: [] });
+  const [openCell, setOpenCell] = useState(null);
   const timer = useRef(null);
+  const deepLinkDone = useRef(false);
 
-  const run = useCallback(() => {
+  const refresh = useCallback(async () => {
+    const zoom = map.getZoom();
+    const mode = modeForZoom(zoom);
+    const resolution = resolutionForZoom(zoom);
     const b = map.getBounds();
-    const body = {
+    const bbox = [
       // MeiliSearch order: [topRight(maxLat,maxLng), bottomLeft(minLat,minLng)].
-      // Clamp so a zoomed-out viewport never sends an out-of-range box.
-      geoBoundingBox: [
-        [clampLat(b.getNorth()), clampLng(b.getEast())],
-        [clampLat(b.getSouth()), clampLng(b.getWest())],
-      ],
-      limit: 500,
-      // Keyword filtering so a query removes non-matching pins from the area
-      // (hybrid/semantic ranks rather than filters, which never drops a pin).
-      semanticRatio: 0,
-    };
-    if (query) body.query = query;
-    // Exclude inferred pins server-side so the 500 limit isn't spent on pins the
-    // user is hiding (a dense area could otherwise return only a few real ones).
-    if (excludeInferred) body.excludeInferred = true;
-    geoSearch(body)
-      .then((r) => onResults(r.results || []))
-      .catch(() => onResults([]));
-  }, [map, query, excludeInferred, onResults]);
+      [clampLat(b.getNorth()), clampLng(b.getEast())],
+      [clampLat(b.getSouth()), clampLng(b.getWest())],
+    ];
+    try {
+      const density = await geoDensity({ geoBoundingBox: bbox, resolution, excludeInferred, query });
+      onTotal(density.total ?? 0);
+      if (mode === 'thumbnail') {
+        // Near zoom uses a FINE resolution (see the zoom→res ladder), so a dense
+        // cell is small: its true count comes from the density facet (correct even
+        // for >500-photo piles — the facet is server-side, uncapped), its bubble
+        // sits at the fine cell's center (on-screen at this zoom), and it's
+        // EXCLUDED from the doc fetch so the pile can't eat the budget. The
+        // remaining sparse photos come back as real docs → individual thumbnails,
+        // each in its own fine cell so a loner never lumps into a neighbouring pile.
+        const dense = (density.cells || []).filter((c) => c.count > CELL_THUMB_LIMIT);
+        const denseIds = dense.map((c) => c.cell);
+        const sr = await geoSearch({
+          geoBoundingBox: bbox,
+          filter: denseIds.length ? [`cell_r${resolution} NOT IN [${denseIds.map((id) => `"${id}"`).join(', ')}]`] : undefined,
+          excludeInferred,
+          query,
+          semanticRatio: 0,
+          limit: NEAR_SPARSE_LIMIT,
+        });
+        setLayer({ mode, resolution, cells: [], denseCells: dense, sparseDocs: (sr.results || []).filter((d) => d._geo && Number.isFinite(d._geo.lat)) });
+      } else {
+        setLayer({ mode, resolution, cells: density.cells || [], denseCells: [], sparseDocs: [] });
+      }
+    } catch {
+      onTotal(0);
+      setLayer((l) => ({ ...l, cells: [], denseCells: [], sparseDocs: [] }));
+    }
+  }, [map, query, excludeInferred, onTotal]);
 
   useMapEvents({
     moveend: () => {
       clearTimeout(timer.current);
-      timer.current = setTimeout(run, 300);
+      timer.current = setTimeout(refresh, 300);
     },
+    // A click on the map background dismisses the open cell popup.
+    click: () => setOpenCell(null),
   });
 
-  // Initial load and whenever the text query changes.
+  // Initial load + refetch when the query/filter change.
   useEffect(() => {
-    run();
+    refresh();
     return () => clearTimeout(timer.current);
-  }, [run]);
+  }, [refresh]);
 
-  return null;
-}
+  const openImage = useCallback(
+    (doc, group) => {
+      const arr = group && group.length ? group : [doc];
+      const slides = arr.map(docToSlide).filter(Boolean);
+      if (!slides.length) return;
+      let index = slides.findIndex((s) => s.meta.hash === doc.hash);
+      if (index < 0) index = 0;
+      onOpenLightbox({ slides, index });
+    },
+    [onOpenLightbox]
+  );
 
-// A single photo pin on the map. `p` is the enrichment doc; clicking the
-// thumb/link in its popup opens the lightbox. Its popup is *controlled* by the
-// `open` prop (driven by the parent's `openHash`) rather than Leaflet's built-in
-// click-to-open, so the selection survives re-clustering as you zoom: see
-// <Markers>. Clicking the marker toggles it via `onSelect`.
-function PhotoMarker({ p, position, onOpen, onSelect, onClose, open = false }) {
-  const ref = useRef(null);
+  // "View on map" deep-link: once the cells around the target load, open the cell
+  // that contains it (works no matter how dense the location is).
   useEffect(() => {
-    if (open) ref.current?.openPopup();
-    else ref.current?.closePopup();
-  }, [open]);
-  return (
-    <Marker
-      ref={ref}
-      position={position}
-      icon={thumbIcon(p)}
-      eventHandlers={{ click: onSelect }}
-    >
-      <Popup closeButton={false} autoClose={false} closeOnClick={false}>
-        <div style={{ maxWidth: 220 }}>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{ float: 'right', border: 'none', background: 'none', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0 }}
-          >
-            ×
-          </button>
-          <img
-            src={thumbFor(p, '200x200')}
-            onClick={() => onOpen(p)}
-            alt={p.path}
-            style={{ width: '100%', borderRadius: 4, cursor: 'pointer', display: 'block', marginBottom: 6 }}
-          />
-          <div style={{ fontWeight: 600, wordBreak: 'break-all' }}>{p.path}</div>
-          {p.place && <div>{p.place}</div>}
-          {p.tags && p.tags.length > 0 && (
-            <div style={{ color: '#666', fontSize: 12 }}>{p.tags.join(', ')}</div>
-          )}
-          <a
-            onClick={() => onOpen(p)}
-            style={{ cursor: 'pointer', display: 'inline-block', marginTop: 4 }}
-          >
-            View full image
-          </a>
-        </div>
-      </Popup>
-    </Marker>
-  );
-}
-
-// Build the Supercluster index for a result set.
-function buildIndex(results) {
-  const sc = new Supercluster({ radius: 60, maxZoom: CLUSTER_MAX_ZOOM });
-  sc.load(
-    results
-      .filter((r) => r._geo && Number.isFinite(r._geo.lat) && Number.isFinite(r._geo.lng))
-      .map((r) => ({
-        type: 'Feature',
-        properties: { cluster: false, ...r },
-        geometry: { type: 'Point', coordinates: [r._geo.lng, r._geo.lat] },
-      }))
-  );
-  return sc;
-}
-
-// A cluster rendered as a marker with a BOUND popup of the group's photos. Using
-// a real Leaflet popup — instead of a free-floating corner panel — gives the same
-// tail/arrow pointing at the cluster a single-photo bubble has, so it's obvious
-// which circle the group belongs to. The popup is *controlled* by `open` (see
-// <Markers>): the parent tracks the open group by a member photo's hash, so when
-// zooming re-clusters the points the popup re-anchors to whatever marker now
-// holds that photo instead of vanishing. Clicking toggles via `onSelect`.
-function ClusterMarker({ position, count, photos, onOpen, onSelect, onClose, open = false }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (open) ref.current?.openPopup();
-    else ref.current?.closePopup();
-  }, [open]);
-  return (
-    <Marker
-      ref={ref}
-      position={position}
-      icon={clusterIcon(count)}
-      eventHandlers={{ click: onSelect }}
-    >
-      <Popup
-        closeButton={false}
-        autoClose={false}
-        closeOnClick={false}
-        maxWidth={CLUSTER_POPUP_W + 20}
-      >
-        <ClusterPhotos photos={photos} onOpen={onOpen} onClose={onClose} />
-      </Popup>
-    </Marker>
-  );
-}
-
-// Renders clustered markers for the current results, bounds and zoom. `openHash`
-// is a member photo's hash identifying the one open popup (or null); it's kept in
-// the parent so the selection is stable across zoom-driven re-clustering. The
-// marker that contains that photo at the current zoom shows the popup — whether
-// that's a colocated cluster, a bigger merged cluster (zoomed out), or the photo
-// as its own marker (zoomed in) — so the group "talk box" follows the photo
-// instead of disappearing when the grouping changes.
-function Markers({ index, onOpen, openHash, setOpenHash }) {
-  const map = useMap();
-  const [view, setView] = useState({ zoom: map.getZoom(), bounds: map.getBounds() });
-
-  useMapEvents({
-    moveend: () => setView({ zoom: map.getZoom(), bounds: map.getBounds() }),
-    zoomend: () => setView({ zoom: map.getZoom(), bounds: map.getBounds() }),
-    // Click on the map background (not a marker) dismisses the open group.
-    click: () => setOpenHash(null),
-  });
-
-  const b = view.bounds;
-  const clusters = index.getClusters(
-    [clampLng(b.getWest()), clampLat(b.getSouth()), clampLng(b.getEast()), clampLat(b.getNorth())],
-    Math.round(view.zoom)
-  );
-
-  return clusters.map((c) => {
-    const [lng, lat] = c.geometry.coordinates;
-    if (c.properties.cluster) {
-      // The zoom at which this cluster breaks apart. Supercluster returns
-      // maxZoom + 1 for points it can never separate (same/near-identical
-      // coords); that's beyond the map ceiling.
-      const expansionZoom = index.getClusterExpansionZoom(c.id);
-      const colocated = expansionZoom > MAP_MAX_ZOOM;
-      // Need the leaves to show a popup (colocated), or to test whether this
-      // cluster is the one currently open (membership of `openHash`).
-      const leaves =
-        colocated || openHash
-          ? index.getLeaves(c.id, Infinity).map((leaf) => leaf.properties)
-          : null;
-      const holdsOpen = !!openHash && !!leaves && leaves.some((p) => p.hash === openHash);
-      if (colocated || holdsOpen) {
-        // Colocated (can't split), OR the open group lives here at this zoom:
-        // show the group in a popup tied to this cluster.
-        return (
-          <ClusterMarker
-            key={`cluster-${c.id}`}
-            position={[lat, lng]}
-            count={c.properties.point_count}
-            photos={leaves}
-            onOpen={onOpen}
-            open={holdsOpen}
-            onSelect={() => setOpenHash(holdsOpen ? null : leaves[0].hash)}
-            onClose={() => setOpenHash(null)}
-          />
-        );
-      }
-      // Separable, and not the open group: clicking zooms to where it splits.
-      return (
-        <Marker
-          key={`cluster-${c.id}`}
-          position={[lat, lng]}
-          icon={clusterIcon(c.properties.point_count)}
-          eventHandlers={{ click: () => map.setView([lat, lng], expansionZoom) }}
-        />
-      );
+    if (deepLinkDone.current) return;
+    if (!initial || !Number.isFinite(initial.lat) || !initial.hash) return;
+    const candidates = [...(layer.cells || []), ...(layer.denseCells || [])];
+    const cell = candidates.find((c) => c.hexagon && pointInRing(initial.lat, initial.lng, c.hexagon));
+    if (cell) {
+      deepLinkDone.current = true;
+      setOpenCell(cell);
     }
-    const hash = c.properties.hash;
-    return (
-      <PhotoMarker
-        key={hash}
-        p={c.properties}
-        position={[lat, lng]}
-        onOpen={onOpen}
-        open={openHash === hash}
-        onSelect={() => setOpenHash(openHash === hash ? null : hash)}
-        onClose={() => setOpenHash(null)}
-      />
-    );
-  });
-}
+  }, [layer, initial]);
 
-// The scrollable thumbnail grid shown inside a cluster's popup. Clicking a thumb
-// opens it (with the whole group as slides) in the lightbox. Scales to hundreds
-// where fanning markers out would still overlap.
-function ClusterPhotos({ photos, onOpen, onClose }) {
   return (
-    <div style={{ width: CLUSTER_POPUP_W }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 6,
-        }}
-      >
-        <span style={{ fontWeight: 600 }}>{photos.length} photos here</span>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{ border: 'none', background: 'none', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0 }}
-        >
-          ×
-        </button>
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(auto-fill, ${THUMB_PX}px)`,
-          gap: CLUSTER_POPUP_GAP,
-          maxHeight: CLUSTER_POPUP_MAXH,
-          overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {photos.map((p) => (
-          <img
-            key={p.hash}
-            src={thumbFor(p)}
-            title={p.path}
-            onClick={() => onOpen(p, photos)}
-            alt={p.path}
-            style={{ width: THUMB_PX, height: THUMB_PX, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }}
-          />
+    <>
+      {layer.mode === 'hexbin' &&
+        layer.cells.map((c) => (
+          <Polygon
+            key={c.cell}
+            positions={c.hexagon}
+            pathOptions={{ color: bucketColor(c.count), weight: 1, fillColor: bucketColor(c.count), fillOpacity: 0.55 }}
+            eventHandlers={{ click: () => map.fitBounds(ringBounds(c.hexagon)) }}
+          >
+            <Tooltip>{fmt(c.count)} photos</Tooltip>
+          </Polygon>
         ))}
-      </div>
-    </div>
+
+      {layer.mode === 'circle' &&
+        layer.cells.map((c) => (
+          <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenCell(c) }} />
+        ))}
+
+      {layer.mode === 'thumbnail' && (
+        <>
+          {layer.denseCells.map((c) => (
+            <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenCell(c) }} />
+          ))}
+          {layer.sparseDocs.map((d) => (
+            <Marker key={d.hash} position={[d._geo.lat, d._geo.lng]} icon={thumbIcon(d)} eventHandlers={{ click: () => openImage(d, null) }} />
+          ))}
+        </>
+      )}
+
+      {openCell && (
+        <Popup
+          position={[openCell.center.lat, openCell.center.lng]}
+          closeButton={false}
+          autoClose={false}
+          closeOnClick={false}
+          maxWidth={CELL_POPUP_WIDTH + 24}
+        >
+          <CellPhotos
+            key={openCell.cell}
+            resolution={layer.resolution}
+            cell={openCell.cell}
+            count={openCell.count}
+            excludeInferred={excludeInferred}
+            onOpen={openImage}
+            onClose={() => setOpenCell(null)}
+          />
+        </Popup>
+      )}
+    </>
   );
 }
 
 export default function MapView({ initial = null }) {
-  const [results, setResults] = useState([]);
-  const [query, setQuery] = useState('');
   const [input, setInput] = useState('');
-  // Lightbox state: { slides, index } or null. Opening from a colocated group
-  // passes the whole group as slides so the arrows page through all of them;
-  // opening a lone marker passes just that one.
-  const [lb, setLb] = useState(null);
-  // The one open marker/cluster popup, identified by a member photo's hash (null
-  // = none). Tracking it by a stable photo hash — not the volatile per-zoom
-  // cluster id — lets the popup follow its grouping across zoom instead of
-  // disappearing when the points re-cluster. Seeded from a deep-link `hash` so
-  // "View on map" opens the photo's group on arrival.
-  const [openHash, setOpenHash] = useState(initial?.hash || null);
-  // Caption-inferred pins (geo_source "inferred") are lower-confidence, so they're
-  // hidden until the user opts in via the checkbox — except when arriving from a
-  // "View on map" deep-link to an inferred photo, where we start with them shown
-  // so the target pin isn't filtered out on arrival.
+  const [query, setQuery] = useState('');
+  // Inferred pins are hidden by default; a "View on map" deep-link to an inferred
+  // photo opts in for that arrival (see ViewOnMapAction / pages/map.js).
   const [showInferred, setShowInferred] = useState(Boolean(initial?.inferred));
-  const favorites = useFavoritesMulti(results);
+  const [lb, setLb] = useState(null);
+  const [total, setTotal] = useState(null);
+  const favorites = useFavoritesMulti(lb?.slides?.map((s) => s.meta) || []);
 
-  const visibleResults = useMemo(
-    () => (showInferred ? results : results.filter((r) => r.geo_source !== 'inferred')),
-    [results, showInferred]
-  );
-
-  // One clustering for the markers (a colocated cluster renders its group in a
-  // popup bound to its marker; the open group's popup follows it across zoom).
-  const index = useMemo(() => buildIndex(visibleResults), [visibleResults]);
-
-  // Reflect the open image in the URL (replaceState, so no history push / router
-  // re-trigger) so a refresh restores it. Also pins the slide's coords so the
-  // viewport re-query on reload includes that photo. Passing null clears `img`.
-  const setDeepLink = useCallback((slide) => {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    const meta = slide?.meta;
-    if (meta) {
-      url.searchParams.set('img', meta.hash);
-      const g = meta._geo;
-      if (g && Number.isFinite(g.lat) && Number.isFinite(g.lng)) {
-        url.searchParams.set('lat', g.lat);
-        url.searchParams.set('lng', g.lng);
-        if (!url.searchParams.get('z')) url.searchParams.set('z', '16');
-      }
-    } else {
-      url.searchParams.delete('img');
-    }
-    window.history.replaceState(window.history.state, '', url);
-  }, []);
-
-  const openImage = useCallback(
-    (p, group) => {
-      const photos = group && group.length ? group : [p];
-      const slides = photos.map(toSlide).filter(Boolean);
-      if (!slides.length) return;
-      const idx = slides.findIndex((s) => s.meta.hash === p.hash);
-      const i = idx < 0 ? 0 : idx;
-      setLb({ slides, index: i });
-      setDeepLink(slides[i]);
-    },
-    [setDeepLink]
-  );
-
-  // Restore the lightbox from ?img= once its photo is in the (viewport) results.
-  const openedFromUrl = useRef(false);
-  useEffect(() => {
-    if (openedFromUrl.current || !initial?.img || !results.length) return;
-    const p = results.find((r) => r.hash === initial.img);
-    if (p) {
-      openedFromUrl.current = true;
-      openImage(p);
-    }
-  }, [initial, results, openImage]);
+  const hasDeep = initial && Number.isFinite(initial.lat) && Number.isFinite(initial.lng);
 
   return (
     <div style={{ position: 'relative', height: 'calc(100vh - 120px)', minHeight: 400 }}>
@@ -466,25 +265,32 @@ export default function MapView({ initial = null }) {
         }}
         title="Show photos whose location was inferred from their caption text (lower confidence)."
       >
-        <input
-          type="checkbox"
-          checked={showInferred}
-          onChange={(e) => setShowInferred(e.target.checked)}
-        />
+        <input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} />
         Show inferred locations
       </label>
 
+      {typeof total === 'number' && (
+        <div
+          style={{
+            position: 'absolute',
+            zIndex: 1000,
+            top: 10,
+            right: 10,
+            padding: '4px 10px',
+            borderRadius: 6,
+            background: 'rgba(255,255,255,0.92)',
+            border: '1px solid #ccc',
+            fontSize: 13,
+            fontWeight: 600,
+          }}
+        >
+          {total.toLocaleString()} in view
+        </div>
+      )}
+
       <MapContainer
-        center={initial && Number.isFinite(initial.lat) ? [initial.lat, initial.lng] : [20, 0]}
-        // Deep-linking a specific photo (a `hash` from "View on map") opens at
-        // max zoom, where only genuinely colocated photos still cluster — so the
-        // target is its own marker (popup) or its true group (list), never lost
-        // in a big mixed cluster. A plain shared link keeps its own zoom.
-        zoom={
-          initial && Number.isFinite(initial.lat)
-            ? (initial.hash ? MAP_MAX_ZOOM : initial.zoom)
-            : 2
-        }
+        center={hasDeep ? [initial.lat, initial.lng] : [20, 0]}
+        zoom={hasDeep ? (Number.isFinite(initial.zoom) ? initial.zoom : DEEP_LINK_ZOOM) : 2}
         maxZoom={MAP_MAX_ZOOM}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom
@@ -495,25 +301,21 @@ export default function MapView({ initial = null }) {
           maxZoom={MAP_MAX_ZOOM}
           maxNativeZoom={TILE_MAX_NATIVE_ZOOM}
         />
-        <ViewportSearch
-          key={query}
+        <MapContent
           query={query}
           excludeInferred={!showInferred}
-          onResults={setResults}
+          initial={initial}
+          onOpenLightbox={setLb}
+          onTotal={setTotal}
         />
-        <Markers index={index} onOpen={openImage} openHash={openHash} setOpenHash={setOpenHash} />
       </MapContainer>
 
       <MetaLightbox
         open={!!lb}
-        close={() => {
-          setLb(null);
-          setDeepLink(null);
-        }}
+        close={() => setLb(null)}
         index={lb?.index ?? 0}
         slides={lb?.slides ?? []}
         plugins={[Video]}
-        on={{ view: ({ index: i }) => setDeepLink(lb?.slides?.[i]) }}
         favorite={{
           isFavorite: (slide) => favorites.isFavorite(slide.meta),
           onToggle: (slide, next) => favorites.toggle(slide.meta, next),

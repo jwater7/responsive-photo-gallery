@@ -51,3 +51,6 @@ npm-debug.log
 /TODO-DONE.md
 /AGENTS.md
 /GEMINI.md
+
+# Playwright map-check screenshots
+tools/shots/

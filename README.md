@@ -131,6 +131,75 @@ restarts. To start fresh, delete the relevant subdirectories: `auth` (login +
 keys) and `tags` (favorites) are durable user state; `cache`, `meili`, and
 `redis` are regenerable (rebuilt / re-indexed on next run).
 
+### Generating test images (programmatically)
+
+`./debug-data/pics/<album>/` is just a folder of images, so you can synthesize
+test albums instead of copying real photos. Two things matter:
+
+- **Unique content per file** — documents are keyed by *content hash*, so
+  byte-identical files collapse into one. Vary each image (a colour + label).
+- **GPS for the map** — the geo enricher reads EXIF GPS (`exifr.gps`) and derives
+  the H3 density cells from it. Tag images with coordinates to place them on the
+  map; cluster many at (nearly) one spot to exercise the cell grouping.
+
+`sharp` (a workspace dependency) rasterises an SVG to JPEG; `piexifjs` (a tiny
+pure-JS EXIF writer) injects the GPS. Save the script **inside `enrichment/`** (so
+`require('sharp')` resolves — Node looks up `node_modules` from the script's own
+directory) and run it there, after `npm i --no-save piexifjs`:
+
+~~~~
+// gen-test-images.js — node gen-test-images.js <album> <count> <lat> <lng> <jitterDeg>
+//   node gen-test-images.js test-grouping 30  48.8584   2.2945   0.00005   (Eiffel: circle, then thumbnails near zoom)
+//   node gen-test-images.js dense-spot    100 -33.8568  151.2153 0.00002   (>60 in one cell: dense circle at every zoom)
+const fs = require('fs'), path = require('path');
+const sharp = require('sharp');
+const piexif = require('piexifjs');
+const [album='test', count='20', lat0='47.62', lng0='-122.35', jit='0.00005'] = process.argv.slice(2);
+const OUT = path.resolve('..', 'debug-data', 'pics', album);
+
+const toDMS = d => { const a=Math.abs(d),D=Math.floor(a),mf=(a-D)*60,M=Math.floor(mf),S=Math.round((mf-M)*60*1e4); return [[D,1],[M,1],[S,1e4]]; };
+const gps = (lat,lng) => piexif.dump({ GPS: {
+  [piexif.GPSIFD.GPSLatitudeRef]: lat>=0?'N':'S', [piexif.GPSIFD.GPSLatitude]: toDMS(lat),
+  [piexif.GPSIFD.GPSLongitudeRef]: lng>=0?'E':'W', [piexif.GPSIFD.GPSLongitude]: toDMS(lng) } });
+
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  for (let i = 1; i <= +count; i++) {
+    const hue = Math.round(360 * i / +count);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"><rect width="100%" height="100%" fill="hsl(${hue},70%,50%)"/><text x="50%" y="50%" font-size="56" fill="#fff" text-anchor="middle" dominant-baseline="middle">${album} ${i}</text></svg>`;
+    const jpeg = await sharp(Buffer.from(svg)).jpeg().toBuffer();
+    const lat = +lat0 + (Math.random()-0.5)*2*+jit, lng = +lng0 + (Math.random()-0.5)*2*+jit;
+    const out = piexif.insert(gps(lat, lng), jpeg.toString('binary'));   // omit this line for plain (no-geo) images
+    fs.writeFileSync(path.join(OUT, `img_${String(i).padStart(3,'0')}.jpg`), Buffer.from(out, 'binary'));
+  }
+  console.log(`wrote ${count} images to ${OUT}`);
+})();
+~~~~
+
+Then index them: Admin → **Full scan**, or the `enrichment-sync` curl above (a
+delta scan suffices — they're new files). The `jitterDeg` controls how tightly
+images colocate: a few metres drops them all in one H3 cell (one count bubble
+that opens a paged list); past `CELL_THUMB_LIMIT` (60) in a cell it stays a dense
+circle even at max zoom, below it near zoom shows individual thumbnails.
+
+### Map UI smoke test (Playwright)
+
+`tools/map-check.js` drives the running gallery's map through deep-link URLs and
+asserts on the rendered Leaflet DOM — off-screen bubbles, marker counts, blank
+map, console errors — the things unit tests and backend queries can't see. It logs
+in with the debug-data admin creds (never printed) and writes screenshots to
+`tools/shots/` (gitignored).
+
+~~~~
+docker compose up -d                 # stack must be running, with some geotagged albums
+npx playwright install chromium      # one-time browser download
+npm run map-check                    # prints a per-scenario table; exits non-zero on failure
+~~~~
+
+Edit the `scenarios` list in `tools/map-check.js` to add viewports (each is a
+`/map?lat=..&lng=..&z=..` deep-link). Pair it with the generated test albums above
+(a dense pile, a small group) to check the zoom ladder end to end.
+
 ### Local development (native, with hot reload)
 
 For fast iteration, run **Express and Next natively** (hot reload) while the

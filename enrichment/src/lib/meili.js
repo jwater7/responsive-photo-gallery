@@ -9,6 +9,7 @@
 
 const { Meilisearch } = require("meilisearch");
 const config = require("./config");
+const geoCells = require("./geo-cells");
 
 const debug = require("debug")("responsive-photo-gallery:meili");
 const debugErr = require("debug")("responsive-photo-gallery:meili:error");
@@ -48,10 +49,16 @@ async function init() {
         // Per-stage failure markers, so the "broken enrichments" list is
         // queryable, e.g. filter `ocr_error IS NOT NULL`. See TODO Enrichment #9.
         "ocr_error", "visual_error", "geo_error", "caption_error",
+        // H3 cell ids per resolution (`cell_r<res>`), faceted for the map's
+        // server-side density counts. See lib/geo-cells.js.
+        ...geoCells.cellFieldNames(),
       ],
       // taken_at = EXIF capture date; last_modified = file mtime, the fallback
       // sort key for photos with no EXIF date (see the /search `sort` handler).
       sortableAttributes: ["taken_at", "last_modified"],
+      // Raise the per-facet value cap (default 100) so a viewport's density query
+      // returns every populated cell, not a truncated subset.
+      faceting: { maxValuesPerFacet: config.geoFacetMaxValues },
     });
   } catch (err) {
     debugErr("update filterable/sortable failed: %s", err.message);

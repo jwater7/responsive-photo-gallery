@@ -40,6 +40,19 @@ export const geoSearch = async (body) => {
   return res.json();
 };
 
+// Server-side map density: true photo count per H3 cell for a viewport (no
+// sampling). Body: { geoBoundingBox, resolution, excludeInferred? }. Returns
+// { resolution, total, cells: [{ cell, count, center:{lat,lng}, hexagon:[[lat,lng]] }] }.
+export const geoDensity = async (body) => {
+  const res = await fetch(prefix + '/geo-density', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('density failed');
+  return res.json();
+};
+
 // Admin: current enrichment status (queue depth, in-progress, next scan).
 export const getEnrichStatus = async () => {
   const res = await fetch(prefix + '/status');

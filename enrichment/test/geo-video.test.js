@@ -45,6 +45,7 @@ require.cache[gnPath] = {
 };
 
 const geo = require("../src/enrichers/geo");
+const { cellFields } = require("../src/lib/geo-cells");
 const ocr = require("../src/enrichers/ocr");
 const caption = require("../src/enrichers/caption");
 // visual.js uses the same image-only SUPPORTED_FORMAT_REGEXP as ocr/caption but
@@ -73,6 +74,11 @@ test("video with GPS → _geo + geo_source:quicktime + date/duration/dims + plac
   assert.strictEqual(out.place_city, "Tacoma");
   assert.strictEqual(out.geo_checked, true);
   assert.ok(!("error" in out));
+  // H3 density cells are derived from the coordinate (every persisted resolution).
+  assert.deepStrictEqual(
+    Object.fromEntries(Object.entries(out).filter(([k]) => k.startsWith("cell_r"))),
+    cellFields(47.1187, -122.9301)
+  );
 });
 
 test("video without GPS → no _geo/geo_source/error; still date/duration/dims", async () => {
@@ -102,7 +108,9 @@ test("manual location preserved on re-scan (videoMeta not consulted)", async () 
     absPath: "/img/trip/clip.mov",
     existing: { geo_source: "manual", _geo: { lat: 1, lng: 2 } },
   });
-  assert.deepStrictEqual(out, { geo_checked: true });
+  // Manual fix preserved (no videoMeta, no _geo rewrite), but its density cells
+  // are (re)derived from the existing coordinate so a backfill reaches it too.
+  assert.deepStrictEqual(out, { geo_checked: true, ...cellFields(1, 2) });
 });
 
 test("applies() dispatcher: geo opts into image+video; image-only enrichers skip video", () => {

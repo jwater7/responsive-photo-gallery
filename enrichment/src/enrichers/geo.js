@@ -28,6 +28,7 @@ const exifr = require("exifr");
 
 const config = require("../lib/config");
 const geonames = require("../lib/geonames");
+const { cellFields } = require("../lib/geo-cells");
 const { pickCaption } = require("../lib/caption-text");
 const { videoMeta } = require("../lib/video-meta");
 const { VIDEO_FORMAT_REGEXP, MEDIA_FORMAT_REGEXP } = require("../lib/walk-dir");
@@ -100,14 +101,19 @@ async function enrichVideo(out, absPath) {
 
 module.exports = {
   name: "geo",
-  version: 2, // bump when output-producing logic changes (forces regen on full scan)
+  version: 4, // bump when output-producing logic changes (forces regen on full scan)
   outputFields: ["geo_checked"],
   applies: (file) => MEDIA_FORMAT_REGEXP.test(file.relPath),
   async enrich({ file, absPath, existing }) {
     const out = { geo_checked: true };
 
-    // Never clobber a manually-assigned location.
-    if (existing && existing.geo_source === "manual") return out;
+    // Never clobber a manually-assigned location — but still (re)derive its H3
+    // map-density cells from the existing coordinate, so a backfill/version bump
+    // gives manually-pinned docs their cells too.
+    if (existing && existing.geo_source === "manual") {
+      if (existing._geo) Object.assign(out, cellFields(existing._geo.lat, existing._geo.lng));
+      return out;
+    }
 
     try {
       if (isVideo(file.relPath)) {
@@ -121,6 +127,10 @@ module.exports = {
       // file is the no-`_geo`-but-no-error case and is not retried.
       out.error = err.message;
     }
+
+    // Tag the location's H3 cells (all persisted resolutions) whenever we have a
+    // coordinate — exif/quicktime or inferred — so the map can count by cell.
+    if (out._geo) Object.assign(out, cellFields(out._geo.lat, out._geo.lng));
 
     return out;
   },

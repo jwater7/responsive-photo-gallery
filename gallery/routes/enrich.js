@@ -111,6 +111,9 @@ async function forward(req, res, targetPath) {
 }
 
 router.post('/search', (req, res) => forward(req, res, '/api/v1/search'))
+// Map density: true photo count per H3 cell for a viewport (the map's primary
+// data source — replaces sampled client-side clustering).
+router.post('/geo-density', (req, res) => forward(req, res, '/api/v1/geo-density'))
 router.post('/geo', (req, res) => forward(req, res, '/api/v1/geo'))
 router.get('/status', (req, res) => forward(req, res, '/api/v1/status'))
 // Admin: one-shot enrichment coverage snapshot (counts of docs with embeddings,

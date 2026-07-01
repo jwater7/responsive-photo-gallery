@@ -13,6 +13,7 @@ const enrichers = require("../enrichers");
 const config = require("../lib/config");
 const embedder = require("../lib/embedder");
 const geonames = require("../lib/geonames");
+const geoCells = require("../lib/geo-cells");
 const path = require("path");
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
 
@@ -321,6 +322,9 @@ router.post("/geo", async (req, res) => {
     fields.place_city = place.city;
     fields.place_country = place.country;
   }
+  // Tag the location's H3 cells so a manually-pinned photo participates in the
+  // map's server-side density immediately (not only after a re-enrich).
+  Object.assign(fields, geoCells.cellFields(lat, lng));
 
   try {
     await meili.init();
@@ -338,6 +342,71 @@ router.post("/geo", async (req, res) => {
   } catch (err) {
     debugErr("manual geo failed: %s", err.message);
     return res.status(503).json({ error: { code: 503, message: "MeiliSearch unavailable" } });
+  }
+});
+
+/**
+ * @swagger
+ * /geo-density:
+ *   post:
+ *     summary: True photo count per H3 cell for a map viewport (no sampling)
+ *     description: >-
+ *       Given a bounding box and an H3 resolution, returns each populated cell's
+ *       exact count (via faceting on the precomputed cell-id field) plus the
+ *       cell's drawable center and hexagon, and an exact viewport total. Honors
+ *       the same `excludeInferred` filter as /search. This replaces the old
+ *       client-side clustering of a 500-doc sample.
+ *     produces: application/json
+ *     responses:
+ *       200: { description: Per-cell counts + geometry and a viewport total }
+ *       400: { description: Missing/invalid geoBoundingBox or resolution }
+ *       503: { description: MeiliSearch unavailable }
+ */
+router.post("/geo-density", async (req, res) => {
+  const body = req.body || {};
+  const bbox = body.geoBoundingBox;
+  const resolution = parseInt(body.resolution, 10);
+  if (!Array.isArray(bbox) || bbox.length !== 2) {
+    return res.status(400).json({
+      error: { code: 400, message: "geoBoundingBox [[topRightLat,topRightLng],[bottomLeftLat,bottomLeftLng]] is required" },
+    });
+  }
+  if (!geoCells.RESOLUTIONS.includes(resolution)) {
+    return res.status(400).json({
+      error: { code: 400, message: `resolution must be one of: ${geoCells.RESOLUTIONS.join(", ")}` },
+    });
+  }
+
+  const field = geoCells.fieldName(resolution);
+  const filters = [
+    // MeiliSearch order: [topRight(maxLat,maxLng), bottomLeft(minLat,minLng)].
+    `_geoBoundingBox([${bbox[0][0]}, ${bbox[0][1]}], [${bbox[1][0]}, ${bbox[1][1]}])`,
+  ];
+  // Mirror /search: drop the lower-confidence caption-inferred pins on request.
+  if (body.excludeInferred) filters.push('geo_source != "inferred"');
+  const query = typeof body.query === "string" ? body.query : "";
+
+  try {
+    // One faceted query yields the per-cell counts (facetDistribution) AND the
+    // exact viewport total (estimatedTotalHits); limit 0 — we want counts, not docs.
+    const result = await meili.search(query, { filter: filters, facets: [field], limit: 0 });
+    const dist = (result.facetDistribution && result.facetDistribution[field]) || {};
+    const cells = Object.entries(dist).map(([cell, count]) => ({
+      cell,
+      count,
+      center: geoCells.cellCenter(cell),
+      hexagon: geoCells.cellHexagon(cell),
+    }));
+    return res.status(200).json({
+      resolution,
+      total: result.estimatedTotalHits ?? cells.reduce((s, c) => s + c.count, 0),
+      cells,
+    });
+  } catch (err) {
+    debugErr("geo-density failed: %s", err.message);
+    return res.status(503).json({
+      error: { code: 503, message: "density unavailable - unable to reach MeiliSearch" },
+    });
   }
 });
 

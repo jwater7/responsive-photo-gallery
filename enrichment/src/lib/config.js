@@ -98,6 +98,17 @@ module.exports = {
   // it's best-effort (cities only) and an operator may not want inferred pins.
   geoInferFromCaption: !/^(0|false|no|off)$/i.test(process.env.GEO_INFER_FROM_CAPTION || ""),
 
+  // H3 cell-id resolutions persisted per geotagged doc (one facetable field each,
+  // `cell_r<res>`) for the map's server-side density. Comma list, coarse→fine.
+  // Defaults span world (r1) → street (r11): far/mid zoom use the coarse cells,
+  // near zoom the fine ones so a dense pile's true (uncapped) count still comes
+  // from the facet while its bubble stays on-screen. See lib/geo-cells.js.
+  geoCellResolutions: (process.env.GEO_CELL_RESOLUTIONS || "1,2,3,4,5,6,7,8,9,10,11")
+    .split(",").map((s) => parseInt(s.trim(), 10)).filter(Number.isFinite),
+  // Max facet values returned per query. Must exceed the cell count a viewport
+  // can show so density counts aren't truncated (MeiliSearch default is 100).
+  geoFacetMaxValues: intEnv("GEO_FACET_MAX_VALUES", 1000),
+
   // Realtime filesystem watcher. Enabled by default; set WATCH_ENABLED=false to
   // turn it off and rely solely on the periodic reconcile (e.g. on hosts where
   // the inotify watch limit can't be raised for a large library).

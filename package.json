@@ -14,6 +14,10 @@
     "dev:deps": "docker compose -f docker-compose.yml -f docker-compose.deps.yml up -d rpg-redis rpg-meilisearch rpg-enrichment-indexer rpg-enrichment-worker",
     "dev:api": "IMAGE_PATH=./debug-data/pics CONFIG_PATH=./debug-data/config PRIVATE_KEY=nonvolatile CACHE_PATH=./debug-data/cache TAGS_PATH=./debug-data/tags ENRICH_URL=http://localhost:8080 PORT=8000 DEBUG=express,responsive-photo-gallery:* node --watch gallery/bin/www",
     "dev:ui": "cd gallery/frontend && npm run dev",
-    "dev": "npm run dev:deps && (trap 'kill 0' INT; npm run dev:api & npm run dev:ui & wait)"
+    "dev": "npm run dev:deps && (trap 'kill 0' INT; npm run dev:api & npm run dev:ui & wait)",
+    "map-check": "node tools/map-check.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
   }
 }
