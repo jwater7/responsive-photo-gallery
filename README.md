@@ -182,23 +182,25 @@ images colocate: a few metres drops them all in one H3 cell (one count bubble
 that opens a paged list); past `CELL_THUMB_LIMIT` (60) in a cell it stays a dense
 circle even at max zoom, below it near zoom shows individual thumbnails.
 
-### Map UI smoke test (Playwright)
+### Map UI regression tests (Playwright)
 
-`tools/map-check.js` drives the running gallery's map through deep-link URLs and
-asserts on the rendered Leaflet DOM — off-screen bubbles, marker counts, blank
-map, console errors — the things unit tests and backend queries can't see. It logs
-in with the debug-data admin creds (never printed) and writes screenshots to
-`tools/shots/` (gitignored).
+The `e2e/` suite (`@playwright/test`) drives the running gallery's map through
+deep-link URLs and asserts on the rendered Leaflet DOM — off-screen bubbles,
+marker counts, popups, blank map, console errors — the things unit tests and
+backend queries can't see. `e2e/global-setup.js` logs in once with the debug-data
+admin creds (never printed) and the tests reuse the session.
 
 ~~~~
-docker compose up -d                 # stack must be running, with some geotagged albums
+docker compose up -d                 # stack up, with the test albums below
 npx playwright install chromium      # one-time browser download
-npm run map-check                    # prints a per-scenario table; exits non-zero on failure
+npm run e2e                          # headless; HTML report in playwright-report/
+npm run e2e:ui                       # interactive debugger (time-travel + DOM)
 ~~~~
 
-Edit the `scenarios` list in `tools/map-check.js` to add viewports (each is a
-`/map?lat=..&lng=..&z=..` deep-link). Pair it with the generated test albums above
-(a dense pile, a small group) to check the zoom ladder end to end.
+Add cases to `e2e/map.spec.js` (each opens a `/map?lat=..&lng=..&z=..` deep-link
+and asserts with `expect`). Pair with the generated test albums above (a dense
+pile, a small group) so the zoom ladder is exercised end to end. Point at a
+different target with `MAP_CHECK_URL`.
 
 ### Local development (native, with hot reload)
 
