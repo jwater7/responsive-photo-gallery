@@ -109,7 +109,10 @@ function countIcon(count) {
 function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }) {
   const map = useMap();
   const [layer, setLayer] = useState({ mode: 'circle', resolution: 8, cells: [], denseCells: [], sparsePiles: [] });
-  const [openCell, setOpenCell] = useState(null);
+  // The popup tracks a stable anchor COORDINATE, not a captured cell — the cell it
+  // resolves to is derived from the current layer each render (see openCell below),
+  // so it follows the location across zoom instead of going stale.
+  const [openAnchor, setOpenAnchor] = useState(null);
   const timer = useRef(null);
   const deepLinkDone = useRef(false);
 
@@ -160,14 +163,8 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
       clearTimeout(timer.current);
       timer.current = setTimeout(refresh, 300);
     },
-    // An open popup is anchored to a specific cell's center at the resolution it
-    // was clicked. A zoom refetches at a different resolution and redraws that
-    // area as a different cell (new center), so the popup would hang at a stale
-    // point, detached from the circle/hexbin. Close it on zoom (panning keeps the
-    // popup correctly pinned — H3 centers are fixed — so only zoom dismisses it).
-    zoomstart: () => setOpenCell(null),
     // A click on the map background dismisses the open cell popup.
-    click: () => setOpenCell(null),
+    click: () => setOpenAnchor(null),
   });
 
   // Initial load + refetch when the query/filter change.
@@ -188,18 +185,26 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
     [onOpenLightbox]
   );
 
-  // "View on map" deep-link: once the cells around the target load, open the cell
-  // that contains it (works no matter how dense the location is).
+  // "View on map" deep-link: anchor the popup at the target coordinate so it opens
+  // on the containing cell and FOLLOWS that spot as you zoom (the resolved cell
+  // changes with zoom; the point of interest doesn't). Set once, so a manual close
+  // sticks and it doesn't re-open on the next refetch.
   useEffect(() => {
     if (deepLinkDone.current) return;
     if (!initial || !Number.isFinite(initial.lat) || !initial.hash) return;
-    const candidates = [...(layer.cells || []), ...(layer.denseCells || [])];
-    const cell = candidates.find((c) => c.hexagon && pointInRing(initial.lat, initial.lng, c.hexagon));
-    if (cell) {
-      deepLinkDone.current = true;
-      setOpenCell(cell);
-    }
-  }, [layer, initial]);
+    deepLinkDone.current = true;
+    setOpenAnchor({ lat: initial.lat, lng: initial.lng });
+  }, [initial]);
+
+  // Resolve the anchor to a cell of the CURRENT layer every render: the popup
+  // re-homes onto whichever circle/hexbin now covers the anchor (its photo list
+  // refreshes with it), rather than detaching. null when nothing at this zoom
+  // covers it (e.g. the spot resolved to loose thumbnails), which closes the popup.
+  const openCell = openAnchor
+    ? [...(layer.cells || []), ...(layer.denseCells || [])].find(
+        (c) => c.hexagon && pointInRing(openAnchor.lat, openAnchor.lng, c.hexagon)
+      ) || null
+    : null;
 
   return (
     <>
@@ -217,13 +222,13 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
 
       {layer.mode === 'circle' &&
         layer.cells.map((c) => (
-          <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenCell(c) }} />
+          <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenAnchor(c.center) }} />
         ))}
 
       {layer.mode === 'thumbnail' && (
         <>
           {layer.denseCells.map((c) => (
-            <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenCell(c) }} />
+            <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenAnchor(c.center) }} />
           ))}
           {layer.sparsePiles.map((p) => (
             <Marker
@@ -251,7 +256,7 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
             count={openCell.count}
             excludeInferred={excludeInferred}
             onOpen={openImage}
-            onClose={() => setOpenCell(null)}
+            onClose={() => setOpenAnchor(null)}
           />
         </Popup>
       )}
