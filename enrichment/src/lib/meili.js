@@ -226,8 +226,27 @@ async function failedTaskCount() {
   }
 }
 
+/**
+ * Delete the retained FAILED tasks (Meili keeps finished tasks until deleted or
+ * aged out), so the failedTaskCount health signal can be reset AFTER the cause of
+ * the failures is fixed. Meili only permits deleting finished tasks; we scope to
+ * `statuses=failed`. Deletion is itself asynchronous — Meili enqueues a
+ * `taskDeletion` task — so this returns that task descriptor rather than a final
+ * count. Throws on a transport/HTTP error so the route can report it.
+ */
+async function clearFailedTasks() {
+  const base = config.meiliHostUrl.replace(/\/$/, "");
+  const r = await fetch(`${base}/tasks?statuses=failed`, {
+    method: "DELETE",
+    headers: config.meiliApiKey ? { Authorization: `Bearer ${config.meiliApiKey}` } : {},
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d && d.message ? d.message : `task deletion failed (HTTP ${r.status})`);
+  return d; // { taskUid, status: "enqueued", ... }
+}
+
 function isConnected() {
   return !!client;
 }
 
-module.exports = { init, index, getDoc, updateFields, allDocs, allDocStats, allDocRefs, deleteDocs, search, indexStats, failedTaskCount, isConnected, INDEX_NAME };
+module.exports = { init, index, getDoc, updateFields, allDocs, allDocStats, allDocRefs, deleteDocs, search, indexStats, failedTaskCount, clearFailedTasks, isConnected, INDEX_NAME };

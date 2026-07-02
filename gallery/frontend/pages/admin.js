@@ -30,6 +30,7 @@ import {
   getEnrichIndexStats,
   getEnrichOcrStats,
   getEnrichConfig,
+  clearEnrichFailedTasks,
 } from '../lib/enrich-api';
 import {
   albums as fetchAlbums,
@@ -79,6 +80,34 @@ export default function Admin() {
       setCoverageError(true);
     } finally {
       setCoverageBusy(false);
+    }
+  };
+
+  // Delete Meili's retained FAILED task history, resetting the failedTasks health
+  // signal. Meant for AFTER the underlying cause is fixed (otherwise it just
+  // climbs again), so it's confirmed and only offered when the count is nonzero.
+  const [clearingTasks, setClearingTasks] = useState(false);
+  const clearFailedTasks = async () => {
+    if (
+      !window.confirm(
+        'Delete the retained failed-task history in the search index? ' +
+          'Do this only after the cause of the failures is fixed — otherwise ' +
+          'the count will just climb again. This does not touch your photos or ' +
+          'their data.'
+      )
+    )
+      return;
+    setClearingTasks(true);
+    try {
+      await clearEnrichFailedTasks();
+      // Deletion is async on the Meili side; give it a moment, then re-read the
+      // coverage snapshot so the failedTasks line reflects the drop.
+      await new Promise((r) => setTimeout(r, 1200));
+      await fetchCoverage();
+    } catch (err) {
+      setCoverageError(true);
+    } finally {
+      setClearingTasks(false);
     }
   };
 
@@ -670,6 +699,7 @@ export default function Admin() {
               </div>
             )}
             {coverage && !coverageError && (
+              <>
               <ul className="list-unstyled mb-0 mt-3">
                 <li>
                   Indexed photos: <strong>{coverage.totalDocs}</strong>
@@ -696,6 +726,34 @@ export default function Admin() {
                   ));
                 })()}
               </ul>
+              {coverage.failedTasks != null && (
+                <div
+                  className={`mt-2 small ${
+                    coverage.failedTasks > 0 ? 'text-danger' : 'text-muted'
+                  }`}
+                >
+                  Failed index tasks (Meili):{' '}
+                  <strong>{coverage.failedTasks}</strong>
+                  {coverage.failedTasks > 0 && (
+                    <>
+                      {' — cumulative; a nonzero value means document writes were' +
+                        ' rejected downstream (e.g. a doc missing its embedding' +
+                        ' vector). Investigate, then clear once resolved.'}
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        className="ms-2 py-0"
+                        onClick={clearFailedTasks}
+                        disabled={clearingTasks || unreachable}
+                        title="Delete the retained failed-task history. Do this only after the cause is fixed."
+                      >
+                        {clearingTasks ? 'Clearing…' : 'Clear'}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+              </>
             )}
             {ocrError && (
               <div className="mt-3 text-danger">

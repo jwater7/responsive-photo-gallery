@@ -480,6 +480,34 @@ router.get("/index-stats", async (req, res) => {
 
 /**
  * @swagger
+ * /clear-failed-tasks:
+ *   post:
+ *     summary: Delete the retained FAILED Meili task history
+ *     description: >-
+ *       Resets the `failedTasks` health signal (see /index-stats) by deleting
+ *       Meili's retained failed tasks. Meili only allows deleting finished tasks;
+ *       this scopes to failed. Deletion is asynchronous (Meili enqueues a
+ *       taskDeletion task), so the response reports that task, not a final count —
+ *       re-fetch /index-stats to confirm the count dropped. Intended to be run
+ *       only AFTER the underlying cause of the failures is fixed, otherwise the
+ *       count simply climbs again.
+ *     produces: application/json
+ *     responses:
+ *       200: { description: Deletion enqueued }
+ *       503: { description: MeiliSearch unavailable }
+ */
+router.post("/clear-failed-tasks", async (req, res) => {
+  try {
+    const task = await meili.clearFailedTasks();
+    return res.status(200).json({ status: "started", task });
+  } catch (err) {
+    debugErr("clear-failed-tasks failed: %s", err.message);
+    return res.status(503).json({ error: { code: 503, message: "MeiliSearch unavailable" } });
+  }
+});
+
+/**
+ * @swagger
  * /ocr-stats:
  *   get:
  *     summary: OCR quality report (on-demand, scans the index)

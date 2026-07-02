@@ -137,6 +137,12 @@ router.post('/enrichment-sync', (req, res) =>
 // Admin: reap orphaned/stale index docs (deleted or edited-away photos).
 // Non-blocking on the indexer side; result observed via /status (`lastReap`).
 router.post('/reap', (req, res) => forward(req, res, '/api/v1/reap'))
+// Admin: delete the retained FAILED Meili task history, resetting the failedTasks
+// health signal (see /index-stats) once the underlying write failures are fixed.
+// Async on the Meili side; the admin re-fetches coverage to confirm it dropped.
+router.post('/clear-failed-tasks', (req, res) =>
+  forward(req, res, '/api/v1/clear-failed-tasks')
+)
 
 // Server-side fire-and-forget reap trigger, used by the excludes PUT handler so
 // that newly-excluded paths' index docs drop out as orphans on the next reap

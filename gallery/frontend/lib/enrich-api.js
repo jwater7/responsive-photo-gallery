@@ -117,3 +117,17 @@ export const triggerReap = async () => {
   if (!res.ok) throw new Error('reap failed');
   return res.json();
 };
+
+// Admin: delete the retained FAILED Meili task history so the failedTasks health
+// signal resets after the underlying cause is fixed. Async on the Meili side
+// (a taskDeletion task) — re-fetch getEnrichIndexStats() afterward to confirm
+// the count dropped.
+export const clearEnrichFailedTasks = async () => {
+  const res = await fetch(prefix + '/clear-failed-tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error('clear-failed-tasks failed');
+  return res.json();
+};
