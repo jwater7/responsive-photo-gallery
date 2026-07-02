@@ -72,6 +72,11 @@ module.exports = {
   // scan). NB: this is the expensive ~3-4s/image stage — only bump deliberately.
   version: 1,
   outputFields: ["embedded"],
+  // Produces a MeiliSearch userProvided vector (_vectors[embedderName]). The
+  // pipeline verifies that vector actually exists before treating the stage as
+  // current, so a vector Meili purged (embedder-config change) re-embeds instead
+  // of hiding behind the surviving `embedded` marker. See pipeline.embeddingLost.
+  embeds: true,
   applies: (file) => SUPPORTED_FORMAT_REGEXP.test(file.relPath),
   async enrich({ absPath }) {
     const vec = await embedder.embedImage(absPath);

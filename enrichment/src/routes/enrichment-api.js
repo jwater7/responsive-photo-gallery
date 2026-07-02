@@ -448,6 +448,11 @@ router.get("/index-stats", async (req, res) => {
     return res.status(200).json({
       totalDocs: stats.numberOfDocuments || 0,
       indexing: !!stats.isIndexing,
+      // Failed Meili tasks (index-wide). Nonzero => writes are being silently
+      // rejected downstream of the pipeline (updateFields awaits only the enqueue),
+      // e.g. the userProvided-embedder vector rejection that froze docs. Surfacing
+      // it here makes that silent data loss visible in the admin panel.
+      failedTasks: await meili.failedTaskCount(),
       coverage: {
         // visual.js writes `embedded: true` alongside the stored _vectors.
         embeddings: fd.embedded || 0,

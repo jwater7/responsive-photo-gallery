@@ -109,7 +109,13 @@ function index() {
 /** Fetch one document by hash, or null if it doesn't exist. */
 async function getDoc(hash) {
   try {
-    return await index().getDocument(hash);
+    // retrieveVectors so the pipeline can tell whether a userProvided embedding
+    // actually EXISTS, not just whether the `embedded` marker is set. Meili can
+    // purge userProvided vectors on an embedder change while leaving that scalar
+    // marker behind; without seeing the real vector, a stale marker skips the
+    // visual stage forever (the drift that froze the library). The vector payload
+    // is small next to the per-file content hash this call precedes.
+    return await index().getDocument(hash, { retrieveVectors: true });
   } catch (err) {
     // meilisearch-js v0.50+ moved the API error fields: the Meili error code is
     // now on err.cause.code and the HTTP status on err.response.status (the old
@@ -197,8 +203,31 @@ async function indexStats() {
   return index().getStats();
 }
 
+/**
+ * Index-wide count of FAILED Meili tasks, for admin diagnostics. A nonzero count
+ * means document writes are being silently rejected downstream of our pipeline —
+ * `updateFields` awaits only the task ENQUEUE, so a task that later fails (e.g. the
+ * userProvided-embedder "vectors required" rejection that froze docs at old
+ * versions) is invisible to `runFile`. Surfacing it makes that class of silent
+ * data loss detectable. Best-effort: returns null if the tasks endpoint can't be
+ * read (never throws into /index-stats).
+ */
+async function failedTaskCount() {
+  try {
+    const base = config.meiliHostUrl.replace(/\/$/, "");
+    const r = await fetch(`${base}/tasks?statuses=failed&limit=1`, {
+      headers: config.meiliApiKey ? { Authorization: `Bearer ${config.meiliApiKey}` } : {},
+    });
+    const d = await r.json();
+    return typeof d.total === "number" ? d.total : null;
+  } catch (err) {
+    debugErr("failedTaskCount failed: %s", err.message);
+    return null;
+  }
+}
+
 function isConnected() {
   return !!client;
 }
 
-module.exports = { init, index, getDoc, updateFields, allDocs, allDocStats, allDocRefs, deleteDocs, search, indexStats, isConnected, INDEX_NAME };
+module.exports = { init, index, getDoc, updateFields, allDocs, allDocStats, allDocRefs, deleteDocs, search, indexStats, failedTaskCount, isConnected, INDEX_NAME };
