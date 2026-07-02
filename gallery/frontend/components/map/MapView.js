@@ -50,13 +50,45 @@ function thumbFor(doc) {
   return ref ? imageurl({ ...ref, thumb: '64x64' }) : null;
 }
 
-function thumbIcon(doc) {
+// A single photo thumbnail marker. `count` > 1 badges it as a co-located pile
+// (photos sharing one GPS fix that would otherwise stack invisibly — see
+// coLocatedPiles); clicking such a marker opens the whole pile in the lightbox.
+function thumbIcon(doc, count = 1) {
   const url = thumbFor(doc);
   const half = MARKER_SIZE / 2;
   const inner = url
     ? `<img src="${url}" style="width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;object-fit:cover;border-radius:6px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"/>`
     : `<div style="width:${half}px;height:${half}px;border-radius:50%;background:#2b8cff;border:2px solid #fff"></div>`;
-  return L.divIcon({ html: inner, className: 'rpg-photo-marker', iconSize: [MARKER_SIZE, MARKER_SIZE], iconAnchor: [half, half] });
+  const badge =
+    count > 1
+      ? `<div style="position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#d7301f;color:#fff;font-size:11px;font-weight:700;line-height:14px;text-align:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">${count}</div>`
+      : '';
+  return L.divIcon({
+    html: `<div style="position:relative;width:${MARKER_SIZE}px;height:${MARKER_SIZE}px">${inner}${badge}</div>`,
+    className: 'rpg-photo-marker',
+    iconSize: [MARKER_SIZE, MARKER_SIZE],
+    iconAnchor: [half, half],
+  });
+}
+
+// Group sparse docs that share (essentially) the same coordinate. Without this,
+// photos taken at one spot (a burst, or repeated shots — same GPS fix) render as
+// individual markers stacked exactly on top of each other at the deepest zoom, so
+// all but the topmost are invisible even though the cell count is correct. 6 dp
+// (~0.1 m) treats only a genuinely-identical fix as one pile; distinct nearby
+// photos still get their own marker. Returns [{ lat, lng, docs: [...] }].
+function coLocatedPiles(docs) {
+  const byCoord = new Map();
+  for (const d of docs) {
+    const key = `${d._geo.lat.toFixed(6)},${d._geo.lng.toFixed(6)}`;
+    let pile = byCoord.get(key);
+    if (!pile) {
+      pile = { lat: d._geo.lat, lng: d._geo.lng, docs: [] };
+      byCoord.set(key, pile);
+    }
+    pile.docs.push(d);
+  }
+  return [...byCoord.values()];
 }
 
 // A count "bubble" for a cell, colored by the same log buckets as the hexbins.
@@ -76,7 +108,7 @@ function countIcon(count) {
 // inferred filter changes.
 function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }) {
   const map = useMap();
-  const [layer, setLayer] = useState({ mode: 'circle', resolution: 8, cells: [], denseCells: [], sparseDocs: [] });
+  const [layer, setLayer] = useState({ mode: 'circle', resolution: 8, cells: [], denseCells: [], sparsePiles: [] });
   const [openCell, setOpenCell] = useState(null);
   const timer = useRef(null);
   const deepLinkDone = useRef(false);
@@ -112,13 +144,14 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
           semanticRatio: 0,
           limit: NEAR_SPARSE_LIMIT,
         });
-        setLayer({ mode, resolution, cells: [], denseCells: dense, sparseDocs: (sr.results || []).filter((d) => d._geo && Number.isFinite(d._geo.lat)) });
+        const geoDocs = (sr.results || []).filter((d) => d._geo && Number.isFinite(d._geo.lat));
+        setLayer({ mode, resolution, cells: [], denseCells: dense, sparsePiles: coLocatedPiles(geoDocs) });
       } else {
-        setLayer({ mode, resolution, cells: density.cells || [], denseCells: [], sparseDocs: [] });
+        setLayer({ mode, resolution, cells: density.cells || [], denseCells: [], sparsePiles: [] });
       }
     } catch {
       onTotal(0);
-      setLayer((l) => ({ ...l, cells: [], denseCells: [], sparseDocs: [] }));
+      setLayer((l) => ({ ...l, cells: [], denseCells: [], sparsePiles: [] }));
     }
   }, [map, query, excludeInferred, onTotal]);
 
@@ -186,8 +219,13 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
           {layer.denseCells.map((c) => (
             <Marker key={c.cell} position={[c.center.lat, c.center.lng]} icon={countIcon(c.count)} eventHandlers={{ click: () => setOpenCell(c) }} />
           ))}
-          {layer.sparseDocs.map((d) => (
-            <Marker key={d.hash} position={[d._geo.lat, d._geo.lng]} icon={thumbIcon(d)} eventHandlers={{ click: () => openImage(d, null) }} />
+          {layer.sparsePiles.map((p) => (
+            <Marker
+              key={p.docs[0].hash}
+              position={[p.lat, p.lng]}
+              icon={thumbIcon(p.docs[0], p.docs.length)}
+              eventHandlers={{ click: () => openImage(p.docs[0], p.docs) }}
+            />
           ))}
         </>
       )}
