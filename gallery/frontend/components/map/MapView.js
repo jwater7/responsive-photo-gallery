@@ -160,6 +160,12 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
       clearTimeout(timer.current);
       timer.current = setTimeout(refresh, 300);
     },
+    // An open popup is anchored to a specific cell's center at the resolution it
+    // was clicked. A zoom refetches at a different resolution and redraws that
+    // area as a different cell (new center), so the popup would hang at a stale
+    // point, detached from the circle/hexbin. Close it on zoom (panning keeps the
+    // popup correctly pinned — H3 centers are fixed — so only zoom dismisses it).
+    zoomstart: () => setOpenCell(null),
     // A click on the map background dismisses the open cell popup.
     click: () => setOpenCell(null),
   });
