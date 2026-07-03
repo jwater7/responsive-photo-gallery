@@ -16,6 +16,7 @@ const geonames = require("../lib/geonames");
 const geoCells = require("../lib/geo-cells");
 const path = require("path");
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { MANUAL_SORT_MAX, sortHitsByKeys } = require("../lib/search-sort");
 
 const debugErr = require("debug")("responsive-photo-gallery:enrichment-api:error");
 debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/server.js)
@@ -85,20 +86,21 @@ router.post("/search", async (req, res) => {
   if (body.showRankingScore) opts.showRankingScore = true;
 
   // Optional result ordering. Only an explicit, whitelisted date sort is
-  // honored; the default (and anything unrecognized) leaves results in
-  // relevance order (keyword ranking, or the hybrid score for a smart search).
-  // Meili applies `sort` AFTER ranking, so a semantic search sorted by date
-  // keeps its rankingScoreThreshold filtering but drops the relevance ordering
-  // within the surviving set — intended. Each value maps to a two-key sort:
-  // `taken_at` (EXIF capture date) first, then `last_modified` (file mtime) so
-  // photos with no EXIF date fall back to mtime and land after the dated ones.
+  // honored; the default (and anything unrecognized) leaves results in relevance
+  // order (keyword ranking, or the hybrid score for a smart search). Each value
+  // maps to a two-key sort: `taken_at` (EXIF capture date) first, then
+  // `last_modified` (file mtime) so photos with no EXIF date fall back to mtime
+  // and land after the dated ones.
+  //
+  // How the sort is APPLIED depends on the search kind, decided below once we
+  // know whether a query vector was built: Meili honors `sort` for a
+  // keyword/filter search but SILENTLY IGNORES it for a hybrid/vector search, so
+  // the smart path is sorted server-side (see `manualSort`).
   const SORT_OPTIONS = {
     "date:desc": ["taken_at:desc", "last_modified:desc"],
     "date:asc": ["taken_at:asc", "last_modified:asc"],
   };
-  if (body.sort && SORT_OPTIONS[body.sort]) {
-    opts.sort = SORT_OPTIONS[body.sort];
-  }
+  const sortKeys = (body.sort && SORT_OPTIONS[body.sort]) || null;
 
   // Need either a text query or at least one filter (e.g. a map viewport).
   if (!query && !filters.length) {
@@ -119,7 +121,32 @@ router.post("/search", async (req, res) => {
     }
   }
 
+  // Decide how the date sort is applied. A hybrid search (vector actually built)
+  // ignores Meili's `sort`, so sort that path ourselves; a keyword/filter search
+  // lets Meili do it. `opts.hybrid` is set only when the vector build above
+  // succeeded, so a failed embedding correctly falls back to the keyword path.
+  const manualSort = !!(sortKeys && opts.hybrid);
+  if (sortKeys && !manualSort) opts.sort = sortKeys;
+
   try {
+    if (manualSort) {
+      // Pull the whole score-thresholded match set (capped), order it by date
+      // ourselves, then serve just the caller's page from the sorted list. Each
+      // page re-fetches the capped set — cheap, since the smart threshold keeps
+      // it small and bounded by MANUAL_SORT_MAX.
+      const results = await meili.search(query, { ...opts, limit: MANUAL_SORT_MAX, offset: 0 });
+      const sorted = sortHitsByKeys(results.hits, sortKeys);
+      const pageOffset = Number(offset);
+      const pageLimit = Number(limit);
+      return res.status(200).json({
+        query,
+        offset: pageOffset,
+        limit: pageLimit,
+        semanticRatio: opts.hybrid ? semanticRatio : 0,
+        total: sorted.length,
+        results: sorted.slice(pageOffset, pageOffset + pageLimit),
+      });
+    }
     const results = await meili.search(query, opts);
     return res.status(200).json({
       query,
