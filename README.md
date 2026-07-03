@@ -202,6 +202,17 @@ and asserts with `expect`). Pair with the generated test albums above (a dense
 pile, a small group) so the zoom ladder is exercised end to end. Point at a
 different target with `MAP_CHECK_URL`.
 
+One fixture is committed as a script because it targets a specific behaviour the
+big hotspots can't: `node gallery/scripts/gen-map-fixtures.js` writes
+`test-colocated-small` — 3 spots ~40 m apart near Reykjavik with 2 **exactly
+colocated** photos each (6 photos, 3 coordinates). The big `--geo` hotspots pile
+90+ on one point, so they always exceed `CELL_THUMB_LIMIT` (60) and render as a
+dense bubble; this small group stays in the sparse path, where co-located photos
+would otherwise stack invisibly (the map showed 3 markers for a cell of 6). After
+generating, index the new path (`enrichment-sync` with `"path":"test-colocated-small"`,
+or Admin → Full scan). The `colocated…` / `deep-link popup…` specs deep-link to
+`lat=64.1466&lng=-21.9426`.
+
 ### Local development (native, with hot reload)
 
 For fast iteration, run **Express and Next natively** (hot reload) while the
