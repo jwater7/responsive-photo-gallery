@@ -44,6 +44,12 @@ async function labelVectors() {
       }
       return vecs;
     })();
+    // Never cache a rejection: one transient failure computing the label
+    // vectors would otherwise disable tagging for the worker's lifetime (the
+    // same clear-on-failure embedder.load applies to the model itself).
+    labelVectorsPromise.catch(() => {
+      labelVectorsPromise = null;
+    });
   }
   return labelVectorsPromise;
 }
@@ -80,11 +86,17 @@ module.exports = {
   applies: (file) => SUPPORTED_FORMAT_REGEXP.test(file.relPath),
   async enrich({ absPath }) {
     const vec = await embedder.embedImage(absPath);
-    let tags = [];
+    let tags;
     try {
       tags = await tagsFor(vec);
     } catch (err) {
       debugErr("tagging failed for %s: %s", absPath, err.message);
+      // Soft failure: the pipeline records `visual_error` (no version stamp, no
+      // output merged) so the stage retries on a later scan, instead of the doc
+      // being stamped current with permanently empty tags. The embedding is
+      // recomputed on that retry — acceptable for this rare path, and it keeps
+      // the soft-fail contract uniform (a failed stage writes nothing durable).
+      return { error: `tagging failed: ${err.message}` };
     }
     return {
       embedded: true,
