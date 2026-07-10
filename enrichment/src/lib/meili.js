@@ -59,6 +59,10 @@ async function init() {
       // Raise the per-facet value cap (default 100) so a viewport's density query
       // returns every populated cell, not a truncated subset.
       faceting: { maxValuesPerFacet: config.geoFacetMaxValues },
+      // Raise the offset-paging ceiling (default 1000): the album overlay, the
+      // dense-cell popup, and search infinite scroll all page by offset and
+      // silently hit a wall at this value. See config.searchMaxTotalHits.
+      pagination: { maxTotalHits: config.searchMaxTotalHits },
     });
   } catch (err) {
     debugErr("update filterable/sortable failed: %s", err.message);

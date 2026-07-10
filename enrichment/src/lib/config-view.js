@@ -99,6 +99,7 @@ function serviceConfig() {
       category: "Search & services",
       items: [
         entry("Default semantic ratio", "DEFAULT_SEMANTIC_RATIO", c.defaultSemanticRatio, 0.5),
+        entry("Offset-paging ceiling", "SEARCH_MAX_TOTAL_HITS", c.searchMaxTotalHits, 100000),
         entry("Meili host", "MEILI_HOST_URL", hostOnly(c.meiliHostUrl), "http://rpg-meilisearch:7700"),
         entry("Redis", "REDIS_URL", hostOnly(c.redisUrl), "redis://rpg-redis:6379"),
         entry("API port", "ENRICHMENT_PORT", c.port, 8080),

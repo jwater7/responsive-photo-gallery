@@ -109,6 +109,17 @@ module.exports = {
   // can show so density counts aren't truncated (MeiliSearch default is 100).
   geoFacetMaxValues: intEnv("GEO_FACET_MAX_VALUES", 1000),
 
+  // Ceiling on offset+limit paging (MeiliSearch pagination.maxTotalHits;
+  // default 1000). Every offset-paged consumer silently stops at this value:
+  // the album enrichment overlay (filter album=X), a dense cell's popup
+  // paging, and the search page's infinite scroll. It therefore has to cover
+  // the largest filter-scoped set the UI can page through — in the worst case
+  // the whole index (one album/cell holding most of the library), so it's
+  // sized to the library scale (~60k docs) with headroom, not to a per-page
+  // number. Meili's 1000 default only exists to bound deep-pagination cost;
+  // raising it costs nothing until someone actually pages that deep.
+  searchMaxTotalHits: intEnv("SEARCH_MAX_TOTAL_HITS", 100000),
+
   // Realtime filesystem watcher. Enabled by default; set WATCH_ENABLED=false to
   // turn it off and rely solely on the periodic reconcile (e.g. on hosts where
   // the inotify watch limit can't be raised for a large library).

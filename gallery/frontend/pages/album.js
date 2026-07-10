@@ -59,6 +59,10 @@ export default function Album() {
 
   // Enrichment overlay (AI tags, geo, OCR…) keyed by full path. Fail-soft and
   // only when the enrichment feature is up, so the album works when it is down.
+  // Paged: a single limit-1000 fetch silently dropped metadata (and "View on
+  // map") for an index-order-arbitrary subset of any album with more than 1000
+  // indexed photos. The server's offset ceiling is raised to cover full albums
+  // (SEARCH_MAX_TOTAL_HITS); pages accumulate into one map, applied at the end.
   useEffect(() => {
     if (!album || !features.search) {
       setEnrichMap({})
@@ -66,12 +70,17 @@ export default function Album() {
     }
     let cancelled = false
     ;(async () => {
+      const PAGE = 1000
       try {
         const safe = album.replace(/"/g, '\\"')
-        const r = await geoSearch({ filter: `album = "${safe}"`, limit: 1000 })
-        if (cancelled) return
         const map = {}
-        for (const doc of r.results || []) map[doc.path] = doc
+        for (let offset = 0; ; offset += PAGE) {
+          const r = await geoSearch({ filter: `album = "${safe}"`, limit: PAGE, offset })
+          if (cancelled) return
+          const raw = r.results || []
+          for (const doc of raw) map[doc.path] = doc
+          if (raw.length < PAGE) break
+        }
         setEnrichMap(map)
       } catch (_) {
         if (!cancelled) setEnrichMap({})
