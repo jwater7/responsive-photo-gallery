@@ -49,9 +49,11 @@ function cacheImageThumb(src, dest, width, height, cb) {
       return cb(new Error('Source file does not exist'), undefined, undefined);
     }
 
-    // try making the directory if not already there
+    // try making the directory if not already there. Two-arg then(): a
+    // .catch(cb).then(pipeline) chain would run the pipeline AFTER cb(err) —
+    // the pipeline then fails on the missing dir and fires cb a second time
+    // (double HTTP response upstream: ERR_HTTP_HEADERS_SENT).
     mkdirp(path.dirname(dest))
-    .catch(err => cb(err, undefined, undefined))
     .then(() => {
       const sharpImage = sharp(src);
       return sharpImage
@@ -76,7 +78,7 @@ function cacheImageThumb(src, dest, width, height, cb) {
               return cb(undefined, imageBuffer, contentType);
             });
         });
-    });
+    }, err => cb(err, undefined, undefined));
   });
 }
 
@@ -91,9 +93,9 @@ function cacheVideoThumb(src, dest, width, height, cb) {
       return cb(new Error('Source file does not exist'), undefined, undefined);
     }
 
-    // try making the directory if not already there
+    // try making the directory if not already there. Two-arg then(): see
+    // cacheImageThumb — a .catch(cb).then(pipeline) chain double-fires cb.
     mkdirp(path.dirname(dest))
-    .catch(err => cb(err, undefined, undefined))
     .then(() => {
       const ffmpegImage = ffmpeg(src);
       return ffmpegImage
@@ -117,7 +119,7 @@ function cacheVideoThumb(src, dest, width, height, cb) {
           filename: path.basename(dest),
           size: width + 'x' + height,
         });
-    });
+    }, err => cb(err, undefined, undefined));
   });
 }
 
@@ -400,7 +402,13 @@ function screenshotToTemp(src) {
   return new Promise((resolve, reject) => {
     ffmpeg(src)
       .on('end', () => resolve(tmp))
-      .on('error', (err) => reject(err))
+      .on('error', (err) => {
+        // A failed screenshot can leave a partially written frame behind; the
+        // caller's cleanup only runs on success (it never learns `tmp`), so
+        // repeated failures would steadily fill os.tmpdir().
+        fs.promises.unlink(tmp).catch(() => {});
+        reject(err);
+      })
       .screenshots({
         count: 1,
         folder: path.dirname(tmp),
