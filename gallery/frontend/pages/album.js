@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { Breadcrumb, Button, ButtonGroup, Form, ProgressBar } from 'react-bootstrap'
+import { Alert, Breadcrumb, Button, ButtonGroup, Form, ProgressBar } from 'react-bootstrap'
 import { useSearchParams } from 'next/navigation'
 import Video from 'yet-another-react-lightbox/plugins/video'
 import Slideshow from 'yet-another-react-lightbox/plugins/slideshow'
@@ -42,7 +42,7 @@ export default function Album() {
   const searchParams = useSearchParams()
   const album = searchParams.get('album')
 
-  const { manifest, building, status } = useAlbum(album)
+  const { manifest, building, status, error: albumError } = useAlbum(album)
   const { favSet, toggle: toggleFavorite } = useFavorites(album)
 
   const [index, setIndex] = useState(-1)
@@ -189,7 +189,16 @@ export default function Album() {
           </div>
         )}
 
-        {!manifest && !building && <>Loading…</>}
+        {/* Polling gave up (backend down / album errored): say so instead of
+            sitting on a fake progress bar or an eternal "Loading…". */}
+        {!manifest && !building && albumError && (
+          <Alert variant="warning">
+            Couldn&apos;t load this album{albumError.message ? ` (${albumError.message})` : ''}. Reload the
+            page to retry.
+          </Alert>
+        )}
+
+        {!manifest && !building && !albumError && <>Loading…</>}
 
         {manifest && (
           <>

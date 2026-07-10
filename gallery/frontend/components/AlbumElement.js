@@ -20,7 +20,7 @@ const COVER_ROWS = 5
 const COVER_GAP = 2
 
 export const AlbumElement = ({ album }) => {
-  const { manifest, building, status } = useAlbum(album)
+  const { manifest, building, status, error } = useAlbum(album)
   const cover = manifest?.cover
 
   if (cover?.cells?.length) {
@@ -74,9 +74,11 @@ export const AlbumElement = ({ album }) => {
         fontSize: 14,
       }}
     >
-      {building
-        ? `Building… ${status?.done ?? 0}/${status?.total ?? '?'}`
-        : 'Loading…'}
+      {error
+        ? 'Unavailable'
+        : building
+          ? `Building… ${status?.done ?? 0}/${status?.total ?? '?'}`
+          : 'Loading…'}
     </div>
   )
 }
