@@ -19,17 +19,9 @@ const debugErr = require('debug')(
 )
 debugErr.enabled = true // errors are always-on, not gated by DEBUG
 
-// Alternative to sanitize for paths
-const sanitizeToRoot = (rootDir, subDir) => {
-  const root = path.resolve(rootDir)
-  var s = path.resolve(path.join(root, path.normalize(subDir)))
-  // Boundary test, not a string prefix: require the path separator (or an exact
-  // match on the root) so a sibling like "<root>-evil" can't pass containment.
-  if (s === root || s.startsWith(root + path.sep)) {
-    return s
-  }
-  return ''
-}
+// Alternative to sanitize for paths: the shared containment primitive
+// (identical contract to the local implementation it replaces).
+const { resolveWithin: sanitizeToRoot } = require('rpg-path-safety')
 
 const walkDir = (basedir, dir = '.', filelist = []) => {
   let files = fs.readdirSync(path.join(basedir, dir))

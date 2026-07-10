@@ -10,6 +10,7 @@ const requireAuth = require('../lib/require-auth')
 const imageHandler = require('../handlers/image-handler')
 const albumBuild = require('../handlers/album-build')
 const runtimeConfig = require('rpg-config')
+const { resolveWithin } = require('rpg-path-safety')
 
 // Enrichment feature flags, folded into /ping so the client bootstraps auth +
 // flags in one request. Guarded require: the gallery still pings fine if the
@@ -550,11 +551,8 @@ module.exports = ({ passport, auth }) => {
         .status(400)
         .json({ error: { code: 400, message: 'Invalid album' } })
     }
-    const base = path.resolve(dir)
-    const file = path.resolve(path.join(base, relPath))
-    // Boundary test, not a string prefix (a bare startsWith would also accept a
-    // sibling like "<base>-evil"): require the separator or an exact root match.
-    if (file !== base && !file.startsWith(base + path.sep)) {
+    const file = resolveWithin(dir, relPath)
+    if (!file) {
       return res
         .status(400)
         .json({ error: { code: 400, message: 'Invalid path' } })
@@ -726,11 +724,8 @@ module.exports = ({ passport, auth }) => {
   router.get('/album-tags', required, async (req, res) => {
     const album = req.query.album
     const tag = req.query.tag || 'favorite'
-    const base = path.resolve(tags_path)
-    const dir = path.resolve(path.join(tags_path, album || '', tag))
-    // Boundary test, not a string prefix (a bare startsWith would also accept a
-    // sibling like "<base>-evil"): require the separator or an exact root match.
-    if (dir !== base && !dir.startsWith(base + path.sep)) {
+    const dir = resolveWithin(tags_path, path.join(album || '', tag))
+    if (!dir) {
       return res
         .status(400)
         .json({ error: { code: 400, message: 'Invalid path' } })

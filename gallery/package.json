@@ -29,6 +29,7 @@
     "pug": "^3.0.4",
     "query-string": "^9.4.0",
     "rpg-config": "*",
+    "rpg-path-safety": "*",
     "sanitize-filename": "^1.6.4",
     "serve-favicon": "^2.5.1",
     "swagger-jsdoc": "^6.3.0",

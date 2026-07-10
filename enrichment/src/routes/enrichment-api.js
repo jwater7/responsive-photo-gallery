@@ -18,6 +18,7 @@ const path = require("path");
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
 const { MANUAL_SORT_MAX, sortHitsByKeys } = require("../lib/search-sort");
 const { needsEmbedOptOut } = require("../lib/pipeline");
+const { resolveWithin } = require("rpg-path-safety");
 
 const debugErr = require("debug")("responsive-photo-gallery:enrichment-api:error");
 debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/server.js)
@@ -285,7 +286,11 @@ router.post("/reap", async (req, res) => {
  */
 router.post("/enqueue", async (req, res) => {
   const rel = req.body && req.body.path;
-  if (!rel || typeof rel !== "string" || rel.includes("..")) {
+  // Shared containment primitive — replaces a '..'-substring test that was both
+  // weaker (a string check, not a resolved-path boundary) and stricter in the
+  // wrong way (it also rejected legitimate names like "a..b.jpg").
+  const absPath = resolveWithin(config.imagePath, typeof rel === "string" ? rel : "");
+  if (!absPath) {
     return res.status(400).json({ error: { code: 400, message: "Valid relative path required" } });
   }
   if (!SUPPORTED_FORMAT_REGEXP.test(rel)) {
@@ -294,7 +299,7 @@ router.post("/enqueue", async (req, res) => {
 
   const relPath = rel.split(path.sep).join("/");
   const album = relPath.includes("/") ? relPath.split("/")[0] : "root";
-  const file = { album, relPath, absPath: path.join(config.imagePath, relPath) };
+  const file = { album, relPath, absPath };
 
   try {
     await queue.enqueueFile(file);
