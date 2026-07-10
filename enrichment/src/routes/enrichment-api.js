@@ -17,6 +17,7 @@ const geoCells = require("../lib/geo-cells");
 const path = require("path");
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
 const { MANUAL_SORT_MAX, sortHitsByKeys } = require("../lib/search-sort");
+const { needsEmbedOptOut } = require("../lib/pipeline");
 
 const debugErr = require("debug")("responsive-photo-gallery:enrichment-api:error");
 debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/server.js)
@@ -355,14 +356,23 @@ router.post("/geo", async (req, res) => {
 
   try {
     await meili.init();
-    // Only an already-indexed image can be pinned. A partial update preserves
-    // its existing _vectors; writing a brand-new doc would fail the embedder's
-    // "vectors required" validation.
+    // Only an already-indexed image can be pinned (writing a brand-new doc
+    // here would bypass the pipeline's base fields).
     const existing = await meili.getDoc(hash);
     if (!existing) {
       return res.status(404).json({
         error: { code: 404, message: "Image not indexed; cannot assign a location" },
       });
+    }
+    // The userProvided embedder re-validates vectors on EVERY partial update:
+    // a write to a doc with no stored vector (a video, or an image the visual
+    // stage hasn't embedded yet) fails the WHOLE task after this response has
+    // already returned ok — the pin would be silently discarded (the same
+    // write-loss mechanism as the frozen-docs incident). Opt out exactly like
+    // the pipeline does; never emitted for an embedded doc, which would wipe
+    // its stored vector.
+    if (needsEmbedOptOut(fields, existing)) {
+      fields._vectors = { [config.embedderName]: null };
     }
     await meili.updateFields(fields);
     return res.status(200).json({ status: "ok", _geo: fields._geo, place: fields.place || null });

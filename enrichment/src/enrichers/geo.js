@@ -99,27 +99,35 @@ async function enrichVideo(out, absPath) {
   if (meta.height != null) out.height = meta.height;
 }
 
+// Fields the extractors may set that describe the LOCATION. For a manually
+// pinned doc these are dropped (manual has precedence), while the rest of the
+// extraction (taken_at, duration, width/height) still lands — a pin placed
+// before the stage's first successful pass must not cost the doc its capture
+// date (the old early-return stamped the stage current with taken_at missing
+// forever).
+const LOCATION_FIELDS = ["_geo", "geo_source", "place", "place_city", "place_country"];
+
 module.exports = {
   name: "geo",
-  version: 4, // bump when output-producing logic changes (forces regen on full scan)
+  // bump when output-producing logic changes (forces regen on full scan).
+  // v5: manually-pinned docs now extract non-location metadata (taken_at,
+  // duration, dims) too — the bump backfills docs stamped v4 by the old
+  // early-return that skipped extraction entirely.
+  version: 5,
   outputFields: ["geo_checked"],
   applies: (file) => MEDIA_FORMAT_REGEXP.test(file.relPath),
   async enrich({ file, absPath, existing }) {
     const out = { geo_checked: true };
+    const manual = !!(existing && existing.geo_source === "manual");
 
-    // Never clobber a manually-assigned location — but still (re)derive its H3
-    // map-density cells from the existing coordinate, so a backfill/version bump
-    // gives manually-pinned docs their cells too.
-    if (existing && existing.geo_source === "manual") {
-      if (existing._geo) Object.assign(out, cellFields(existing._geo.lat, existing._geo.lng));
-      return out;
-    }
-
+    // Extract into a scratch object so a manual pin can keep its location
+    // while still receiving the non-location metadata this stage extracts.
+    const found = {};
     try {
       if (isVideo(file.relPath)) {
-        await enrichVideo(out, absPath);
+        await enrichVideo(found, absPath);
       } else {
-        await enrichImage(out, absPath);
+        await enrichImage(found, absPath);
       }
     } catch (err) {
       debugErr("geo extraction failed for %s: %s", absPath, err.message);
@@ -128,9 +136,16 @@ module.exports = {
       out.error = err.message;
     }
 
-    // Tag the location's H3 cells (all persisted resolutions) whenever we have a
-    // coordinate — exif/quicktime or inferred — so the map can count by cell.
-    if (out._geo) Object.assign(out, cellFields(out._geo.lat, out._geo.lng));
+    for (const [k, v] of Object.entries(found)) {
+      if (!manual || !LOCATION_FIELDS.includes(k)) out[k] = v;
+    }
+
+    // Tag the location's H3 cells (all persisted resolutions) so the map can
+    // count by cell. A manual pin keeps its own coordinate — never clobbered by
+    // EXIF/QuickTime — and (re)derives its cells from it, so a backfill/version
+    // bump gives manually-pinned docs their cells too.
+    const geoForCells = manual ? existing._geo : out._geo;
+    if (geoForCells) Object.assign(out, cellFields(geoForCells.lat, geoForCells.lng));
 
     return out;
   },

@@ -101,16 +101,49 @@ test("ffprobe failure → soft error recorded, geo_checked still set", async () 
   assert.ok(!("_geo" in out));
 });
 
-test("manual location preserved on re-scan (videoMeta not consulted)", async () => {
-  throwNext = true; // would throw if videoMeta were called -> proves it is not
+test("manual location preserved on re-scan; non-location metadata still extracted", async () => {
+  throwNext = false;
+  fakeMeta = {
+    gps: { lat: 9, lng: 9 }, // embedded GPS must NOT clobber the manual pin
+    takenAt: new Date("2020-01-02T03:04:05Z"),
+    duration: 10,
+    width: 640,
+    height: 480,
+  };
   const out = await geo.enrich({
     file: { relPath: "trip/clip.mov" },
     absPath: "/img/trip/clip.mov",
     existing: { geo_source: "manual", _geo: { lat: 1, lng: 2 } },
   });
-  // Manual fix preserved (no videoMeta, no _geo rewrite), but its density cells
-  // are (re)derived from the existing coordinate so a backfill reaches it too.
-  assert.deepStrictEqual(out, { geo_checked: true, ...cellFields(1, 2) });
+  // Location fields stay the pin's: neither rewritten nor replaced by the
+  // embedded GPS (the extracted place belongs to that GPS and is dropped too).
+  assert.ok(!("_geo" in out));
+  assert.ok(!("geo_source" in out));
+  assert.ok(!("place" in out));
+  // The old early-return skipped extraction entirely, so a doc pinned before
+  // its first successful geo pass permanently lost its capture date/duration.
+  assert.strictEqual(out.taken_at, "2020-01-02T03:04:05.000Z");
+  assert.strictEqual(out.duration, 10);
+  // Density cells are (re)derived from the PIN, not the embedded GPS.
+  assert.deepStrictEqual(
+    Object.fromEntries(Object.entries(out).filter(([k]) => k.startsWith("cell_r"))),
+    cellFields(1, 2)
+  );
+});
+
+test("manual pin + failed extraction → soft error (retried), pin cells still derived", async () => {
+  throwNext = true;
+  const out = await geo.enrich({
+    file: { relPath: "trip/clip.mov" },
+    absPath: "/img/trip/clip.mov",
+    existing: { geo_source: "manual", _geo: { lat: 1, lng: 2 } },
+  });
+  assert.strictEqual(out.error, "ffprobe failed");
+  assert.ok(!("_geo" in out));
+  assert.deepStrictEqual(
+    Object.fromEntries(Object.entries(out).filter(([k]) => k.startsWith("cell_r"))),
+    cellFields(1, 2)
+  );
 });
 
 test("applies() dispatcher: geo opts into image+video; image-only enrichers skip video", () => {
