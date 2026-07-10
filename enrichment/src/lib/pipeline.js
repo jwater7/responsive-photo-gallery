@@ -194,12 +194,16 @@ async function runFile(file, { force = false } = {}) {
       // An enricher may report a soft failure via an `error` field while still
       // returning (usually empty) output — treat that like a thrown failure, but
       // don't double-log (the enricher already logged on its own `:error`).
+      // The output is NOT merged on a soft failure: a transient error on a
+      // re-run (version bump, force, embeddingLost) must not overwrite
+      // previously good fields — e.g. an OCR timeout returns content:"" and
+      // would wipe the doc's searchable text until a retry succeeded.
       const { error: softError, ...output } = fields;
-      Object.assign(update, output);
       if (softError) {
         update[errorField(enricher)] = String(softError);
         failed.push(enricher.name);
       } else {
+        Object.assign(update, output);
         // Stamp the producing version alongside the output, so a future logic
         // change (a bumped `version`) is detected and regenerated on a full scan.
         update[versionField(enricher)] = enricher.version || 1;
