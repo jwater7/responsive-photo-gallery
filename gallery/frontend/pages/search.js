@@ -60,13 +60,15 @@ export default function Search() {
   const favorites = useFavoritesMulti(results);
   const searchParams = useSearchParams();
 
-  // Mirror the loaded results + the active query so the paging callback (stable,
-  // deps-less) can read the current offset and re-issue the same query for the
-  // next page without going stale.
-  const resultsRef = useRef([]);
-  useEffect(() => {
-    resultsRef.current = results;
-  }, [results]);
+  // The server's paging offset, advanced by the RAW page length — not by how
+  // many hits survived the imageRef filter. Counting the filtered results (the
+  // old `results.length`) drifted the offset whenever a page contained
+  // unreferenceable docs: later pages overlapped (duplicate results/keys), and
+  // a fully-filtered page never advanced at all, so the scroll sentinel
+  // refetched the identical page forever. Same pattern as CellPhotos.
+  const rawOffsetRef = useRef(0);
+  // Mirror the active query so the paging callback (stable, deps-less) can
+  // re-issue the same query for the next page without going stale.
   const activeRef = useRef({ q: '', sm: false, srt: 'relevance' });
 
   // The search identity (query/smart/sort) is written THROUGH the Next router
@@ -106,7 +108,7 @@ export default function Search() {
   const doSearch = useCallback(async (q, sm, srt, { append = false } = {}) => {
     const query = q.trim();
     if (!query) return;
-    const offset = append ? resultsRef.current.length : 0;
+    const offset = append ? rawOffsetRef.current : 0;
     if (!append) {
       activeRef.current = { q: query, sm, srt };
       setBusy(true);
@@ -125,6 +127,7 @@ export default function Search() {
       if (srt === 'date') body.sort = DATE_SORT;
       const r = await geoSearch(body);
       const raw = r.results || [];
+      rawOffsetRef.current = offset + raw.length;
       const hits = raw.filter((it) => imageRef(it));
       setResults((prev) => (append ? [...prev, ...hits] : hits));
       setTotal(typeof r.total === 'number' ? r.total : null);
