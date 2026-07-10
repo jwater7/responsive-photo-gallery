@@ -69,6 +69,13 @@ function scopeTag(force, path) {
   return `${f}@${path || ""}`.replace(/:/g, "_");
 }
 
+/** Merge two force specs: `true` wins, arrays union, both-falsy stays falsy. */
+function mergeForce(a, b) {
+  if (a === true || b === true) return true;
+  const list = [...new Set([...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])])];
+  return list.length ? list : false;
+}
+
 /**
  * Enqueue a file for enrichment.
  * @param {{album: string, relPath: string, absPath: string}} file
@@ -76,11 +83,39 @@ function scopeTag(force, path) {
  *        up-to-date skip for all (`true`) or named enrichers.
  */
 async function enqueueFile(file, force = false) {
+  const q = getQueue();
+  // BullMQ job IDs may not contain ':'. Dedupes concurrent re-enqueues of the
+  // same pending file.
+  const jobId = `file_${file.relPath.replace(/:/g, "_")}`;
+
+  // add() is a SILENT no-op while a job with this id exists in ANY set —
+  // including the retained failed set (removeOnFail keeps the last 1000). Left
+  // alone, a file whose job exhausted its attempts could never be re-enqueued
+  // by any later scan/watcher/API call until ~1000 newer failures evicted it,
+  // and a force flag aimed at a still-queued job would be silently dropped.
+  // Reconcile the prior job first.
+  const prior = await q.getJob(jobId);
+  if (prior) {
+    const state = await prior.getState();
+    if (state === "failed" || state === "completed") {
+      // Finished: remove it so the add() below actually restarts the file with
+      // a fresh attempt budget. (Completed jobs are normally already gone via
+      // removeOnComplete; failed ones are the retention trap.)
+      await prior.remove();
+    } else {
+      // Still queued/delayed/running: dedupe into it, but fold a new force into
+      // the job's data so the worker sees it when the job runs. Limitation: an
+      // ACTIVE job already read its data — that run proceeds un-forced and only
+      // a later enqueue re-applies the force.
+      const merged = mergeForce(prior.data && prior.data.force, force);
+      if (merged) await prior.updateData({ ...prior.data, force: merged });
+      return prior;
+    }
+  }
+
   const data = force ? { ...file, force } : file;
-  return getQueue().add("enrich", data, {
-    // BullMQ job IDs may not contain ':'. Dedupes concurrent re-enqueues of the
-    // same pending file.
-    jobId: `file_${file.relPath.replace(/:/g, "_")}`,
+  return q.add("enrich", data, {
+    jobId,
     attempts: 3,
     backoff: { type: "exponential", delay: 5000 },
     // Remove on completion so a later change to the same path can be re-enqueued
@@ -135,6 +170,7 @@ module.exports = {
   getControlQueue,
   enqueueFile,
   enqueueControl,
+  mergeForce,
   queueStats,
   close,
 };
