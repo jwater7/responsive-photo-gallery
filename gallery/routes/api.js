@@ -373,7 +373,9 @@ module.exports = ({ passport, auth }) => {
 
     handler.image(album, image, thumb, (err, image_buffer, content_type) => {
       if (err) {
-        res.status(500)
+        // The handler reports caller errors as { error: { code: 400, ... } } —
+        // don't flatten them all to 500.
+        res.status(err && err.error && err.error.code ? err.error.code : 500)
         res.json(err)
         res.end()
         return
@@ -465,7 +467,8 @@ module.exports = ({ passport, auth }) => {
 
     handler.video(album, image, (err, video_file) => {
       if (err) {
-        res.status(500)
+        // Same caller-error mapping as /image above.
+        res.status(err && err.error && err.error.code ? err.error.code : 500)
         res.json(err)
         res.end()
         return

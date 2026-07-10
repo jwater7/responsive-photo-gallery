@@ -75,8 +75,11 @@ const isMedia = (rel) => {
 }
 
 // Resolve a caller-supplied album name to an absolute path confined to `root`.
-// Returns '' on traversal attempts.
+// Returns '' on traversal attempts — and on a missing/non-string sub (an
+// omitted `album` query param), which path.normalize would otherwise throw on,
+// turning a caller error into a 500 instead of the callers' clean 400.
 const safeJoin = (root, sub) => {
+  if (typeof sub !== 'string' || !sub) return ''
   const base = path.resolve(root)
   const resolved = path.resolve(path.join(base, path.normalize(sub)))
   // Boundary test, not a string prefix: `startsWith(base)` alone would also

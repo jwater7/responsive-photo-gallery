@@ -113,6 +113,15 @@ const sanitizeRequiredArgumentsAsync = (...a) =>
     })
   )
 
+// num_results must be a positive integer when supplied. Returns the parsed
+// value, or null for anything else — the callers turn null into a 400 (the old
+// behavior fed the raw value straight to limitResults, which silently returned
+// [] and surfaced downstream as a misleading 500 "No Images Processed").
+const sanitizeNumResults = (num_results) => {
+  const n = parseInt(num_results, 10)
+  return +num_results === n && n > 0 ? n : null
+}
+
 const limitResults = (list, num_results, distributed) => {
   // sanitize input
   // make sure we have valid input
@@ -158,7 +167,10 @@ class imageHandler {
   }
 
   image(album, image, thumb, _cb) {
-    sanitizeRequiredArguments([album], (err, args) => {
+    // `image` is required too: passing it through unchecked let a missing
+    // param reach path.join(album, undefined), which throws (a 500) instead
+    // of this clean 400.
+    sanitizeRequiredArguments([album, image], (err, args) => {
       if (err || !args) {
         return _cb(
           {
@@ -171,7 +183,7 @@ class imageHandler {
           undefined
         )
       }
-      const [album] = args
+      const [album, image] = args
 
       const image_path = sanitizeToRoot(this.imagePath, path.join(album, image))
 
@@ -242,7 +254,8 @@ class imageHandler {
   }
 
   video(album, image, _cb) {
-    sanitizeRequiredArguments([album], (err, args) => {
+    // `image` required for the same reason as image() above.
+    sanitizeRequiredArguments([album, image], (err, args) => {
       if (err || !args) {
         return _cb(
           {
@@ -255,7 +268,7 @@ class imageHandler {
           undefined
         )
       }
-      const [album] = args
+      const [album, image] = args
 
       const vid_path = sanitizeToRoot(this.imagePath, path.join(album, image))
 
@@ -343,7 +356,13 @@ class imageHandler {
 
       // Process only a subset if requested
       if (num_results) {
-        files = limitResults(files, num_results, distributed)
+        const n = sanitizeNumResults(num_results)
+        if (n === null) {
+          return _cb({
+            error: { code: 400, message: 'Invalid num_results' },
+          })
+        }
+        files = limitResults(files, n, distributed)
       }
 
       let images = {}
@@ -458,7 +477,13 @@ class imageHandler {
 
       // Process only a subset if requested
       if (num_results) {
-        files = limitResults(files, num_results, distributed)
+        const n = sanitizeNumResults(num_results)
+        if (n === null) {
+          return _cb({
+            error: { code: 400, message: 'Invalid num_results' },
+          })
+        }
+        files = limitResults(files, n, distributed)
       }
 
       let images = {}
@@ -501,6 +526,11 @@ class imageHandler {
               // TODO unique
               image_metadata['tags'] = await withMetadata.tags.reduce(
                 async (acc, unsanTag) => {
+                  // An async reducer's accumulator is a PROMISE from the 2nd
+                  // iteration on — it must be awaited before spreading (the
+                  // same `await acc` the updateImageData reducers use), or a
+                  // 2+ tag request throws "acc is not iterable" → 500.
+                  const tags = await acc
                   const tag = sanitize(unsanTag)
                   const albumTagImagePath = sanitizeToRoot(
                     albumTagsPath,
@@ -509,9 +539,9 @@ class imageHandler {
                   try {
                     await fs.promises.stat(albumTagImagePath)
                   } catch (err) {
-                    return acc
+                    return tags
                   }
-                  return [...acc, tag]
+                  return [...tags, tag]
                 },
                 []
               )
