@@ -70,6 +70,11 @@ export default function Search() {
   // Mirror the active query so the paging callback (stable, deps-less) can
   // re-issue the same query for the next page without going stale.
   const activeRef = useRef({ q: '', sm: false, srt: 'relevance' });
+  // Monotonic id of the newest fetch. A slow, superseded response (an older
+  // query, or an append raced by a fresh search) must drop its result instead
+  // of clobbering the newer state — without this a slow smart-search could
+  // repaint the grid AFTER a faster newer query already rendered.
+  const fetchSeqRef = useRef(0);
 
   // The search identity (query/smart/sort) is written THROUGH the Next router
   // (shallow replace), not a raw history.replaceState. A bare replaceState
@@ -109,9 +114,13 @@ export default function Search() {
     const query = q.trim();
     if (!query) return;
     const offset = append ? rawOffsetRef.current : 0;
+    const seq = ++fetchSeqRef.current;
     if (!append) {
       activeRef.current = { q: query, sm, srt };
       setBusy(true);
+      // A fresh search supersedes any in-flight append; that append's finally
+      // is skipped (stale seq), so its spinner must be cleared here.
+      setLoadingMore(false);
     } else {
       setLoadingMore(true);
     }
@@ -126,6 +135,7 @@ export default function Search() {
       // ranking order.
       if (srt === 'date') body.sort = DATE_SORT;
       const r = await geoSearch(body);
+      if (seq !== fetchSeqRef.current) return; // superseded — drop stale page
       const raw = r.results || [];
       rawOffsetRef.current = offset + raw.length;
       const hits = raw.filter((it) => imageRef(it));
@@ -136,15 +146,18 @@ export default function Search() {
       // page that's all videos/unreferenceable doesn't look like the end.)
       setHasMore(raw.length >= PAGE_SIZE);
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       if (!append) {
         setResults([]);
         setTotal(0);
       }
       setHasMore(false);
     } finally {
-      setSearched(true);
-      if (append) setLoadingMore(false);
-      else setBusy(false);
+      if (seq === fetchSeqRef.current) {
+        setSearched(true);
+        if (append) setLoadingMore(false);
+        else setBusy(false);
+      }
     }
   }, []);
 

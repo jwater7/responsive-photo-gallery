@@ -115,8 +115,14 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
   const [openAnchor, setOpenAnchor] = useState(null);
   const timer = useRef(null);
   const deepLinkDone = useRef(false);
+  // Monotonic id of the newest refresh. Thumbnail mode is two sequential
+  // awaits, so a slow superseded refresh (pre-pan/zoom bounds) could resolve
+  // after a faster newer one and repaint the layer + "in view" total for a
+  // stale viewport. Stale responses drop out instead.
+  const seqRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const seq = ++seqRef.current;
     const zoom = map.getZoom();
     const mode = modeForZoom(zoom);
     const resolution = resolutionForZoom(zoom);
@@ -128,6 +134,7 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
     ];
     try {
       const density = await geoDensity({ geoBoundingBox: bbox, resolution, excludeInferred, query });
+      if (seq !== seqRef.current) return; // superseded — drop the stale viewport
       onTotal(density.total ?? 0);
       if (mode === 'thumbnail') {
         // Near zoom uses a FINE resolution (see the zoom→res ladder), so a dense
@@ -147,12 +154,16 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
           semanticRatio: 0,
           limit: NEAR_SPARSE_LIMIT,
         });
-        const geoDocs = (sr.results || []).filter((d) => d._geo && Number.isFinite(d._geo.lat));
+        if (seq !== seqRef.current) return;
+        const geoDocs = (sr.results || []).filter(
+          (d) => d._geo && Number.isFinite(d._geo.lat) && Number.isFinite(d._geo.lng)
+        );
         setLayer({ mode, resolution, cells: [], denseCells: dense, sparsePiles: coLocatedPiles(geoDocs) });
       } else {
         setLayer({ mode, resolution, cells: density.cells || [], denseCells: [], sparsePiles: [] });
       }
     } catch {
+      if (seq !== seqRef.current) return;
       onTotal(0);
       setLayer((l) => ({ ...l, cells: [], denseCells: [], sparsePiles: [] }));
     }
@@ -250,7 +261,12 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
           maxWidth={CELL_POPUP_WIDTH + 24}
         >
           <CellPhotos
-            key={openCell.cell}
+            // The filter is part of the key: CellPhotos pages with an internal
+            // offset over the FILTERED set, so toggling "Show inferred" while
+            // the popup is open must remount it (fresh page 0 under the new
+            // filter) — a prop change alone left the loaded grid and paging
+            // offset on the old filter while the header count used the new one.
+            key={`${openCell.cell}|${excludeInferred ? 1 : 0}`}
             resolution={layer.resolution}
             cell={openCell.cell}
             count={openCell.count}
