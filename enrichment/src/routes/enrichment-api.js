@@ -15,7 +15,7 @@ const embedder = require("../lib/embedder");
 const geonames = require("../lib/geonames");
 const geoCells = require("../lib/geo-cells");
 const path = require("path");
-const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { MEDIA_FORMAT_REGEXP } = require("../lib/walk-dir");
 const { MANUAL_SORT_MAX, sortHitsByKeys } = require("../lib/search-sort");
 const { needsEmbedOptOut } = require("../lib/pipeline");
 const { resolveWithin } = require("rpg-path-safety");
@@ -293,7 +293,9 @@ router.post("/enqueue", async (req, res) => {
   if (!absPath) {
     return res.status(400).json({ error: { code: 400, message: "Valid relative path required" } });
   }
-  if (!SUPPORTED_FORMAT_REGEXP.test(rel)) {
+  // Full media regexp (images AND videos), matching what the pipeline
+  // actually processes — the old image-only pattern rejected video enqueues.
+  if (!MEDIA_FORMAT_REGEXP.test(rel)) {
     return res.status(400).json({ error: { code: 400, message: "Unsupported file type" } });
   }
 

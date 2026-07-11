@@ -23,6 +23,11 @@ debugErr.enabled = true // errors are always-on, not gated by DEBUG
 // (identical contract to the local implementation it replaces).
 const { resolveWithin: sanitizeToRoot } = require('rpg-path-safety')
 
+// Video thumbs cache under video-thumbs/ (fip appends an image extension to
+// the dest). Selected by the shared registry predicate — the old '.mov'-only
+// extension test mislocated .mp4/.m4v/.webm thumbs under thumbs/.
+const { isVideo } = require('rpg-media-types')
+
 const walkDir = (basedir, dir = '.', filelist = []) => {
   let files = fs.readdirSync(path.join(basedir, dir))
   files.forEach((file) => {
@@ -186,8 +191,7 @@ class imageHandler {
           this.cachePath,
           path.join(album, 'thumbs', thumb, image)
         )
-        // TODO find a better way to do this rather than using extension
-        if (path.extname(image).toLowerCase() == '.mov') {
+        if (isVideo(image)) {
           thumb_path = sanitizeToRoot(
             this.cachePath,
             path.join(album, 'video-thumbs', thumb, image)
@@ -293,8 +297,7 @@ class imageHandler {
           this.cachePath,
           path.join(album, 'thumbs', thumb, image)
         )
-        // TODO find a better way to do this rather than using extension
-        if (path.extname(image).toLowerCase() == '.mov') {
+        if (isVideo(image)) {
           thumb_path = sanitizeToRoot(
             this.cachePath,
             path.join(album, 'video-thumbs', thumb, image)
@@ -363,14 +366,11 @@ class imageHandler {
         (file) => {
           const san_thumb = sanitize(thumb)
           const image_path = path.join(album_path, file)
-          let thumb_path = path.join(
+          let thumb_path = sanitizeToRoot(
             this.cachePath,
-            album,
-            'thumbs',
-            thumb,
-            file
+            path.join(album, 'thumbs', thumb, file)
           )
-          if (path.extname(file).toLowerCase() == '.mov') {
+          if (isVideo(file)) {
             thumb_path = sanitizeToRoot(
               this.cachePath,
               path.join(album, 'video-thumbs', thumb, file)

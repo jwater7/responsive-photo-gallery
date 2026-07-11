@@ -54,25 +54,9 @@ const COVER_CELL_SIZE = parseInt(process.env.COVER_CELL_SIZE, 10) || 128
 const COVER_MAX_CELLS = parseInt(process.env.COVER_MAX_CELLS, 10) || 48
 const COVER_SHEET_COLUMNS = parseInt(process.env.COVER_SHEET_COLUMNS, 10) || 8
 
-const IMAGE_EXTS = new Set([
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.webp',
-  '.gif',
-  '.tif',
-  '.tiff',
-  '.heic',
-  '.heif',
-  '.avif',
-  '.bmp',
-])
-const VIDEO_EXTS = new Set(['.mov', '.mp4', '.m4v', '.webm'])
-
-const isMedia = (rel) => {
-  const ext = path.extname(rel).toLowerCase()
-  return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext)
-}
+// "What counts as media" comes from the shared registry (these sets were its
+// canonical source before it existed — the local copies are gone).
+const { isMedia } = require('rpg-media-types')
 
 // Resolve a caller-supplied album name to an absolute path confined to `root`
 // ('' on traversal or a missing album): the shared containment primitive.

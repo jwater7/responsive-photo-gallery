@@ -22,11 +22,11 @@ const ffmpeg = require('fluent-ffmpeg');
 // 2 and 4 are mirrors of 1 and 3, 5 and 7 are mirrors of 6 and 8
 const needsSwitched = [5, 6, 7, 8];
 
-// TODO need to detect mroe video formats from names
-const isVideo = (f) => (
-  path.extname(f).toLowerCase() == '.mov'
-  || path.extname(f).toLowerCase() == '.mp4'
-)
+// Video-vs-image render dispatch comes from the shared registry, so every
+// registry video format (.mov/.mp4/.m4v/.webm) takes the ffmpeg path.
+// (Previously a local .mov/.mp4-only list: .m4v/.webm were fed to sharp,
+// which failed, and sprite builds silently skipped them.)
+const { isVideo } = require('rpg-media-types');
 
 function cacheThumb(src, dest, width, height, cb) {
 

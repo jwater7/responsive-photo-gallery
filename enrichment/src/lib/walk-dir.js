@@ -6,16 +6,19 @@ const path = require("path");
 
 const { loadExcludes, isExcluded } = require("rpg-config");
 
-const SUPPORTED_FORMAT_REGEXP = /\.(jpe?g|png|tiff?|bmp|webp)$/i;
-// Video formats handled by the geo enricher's ffprobe branch. Kept separate from
-// the image regexp so the image-only enrichers (ocr/visual/caption), which gate
-// their applies() on SUPPORTED_FORMAT_REGEXP, keep skipping video by construction
-// — there is no job `type` field; per-enricher applies() IS the dispatcher.
-const VIDEO_FORMAT_REGEXP = /\.(mov|mp4|m4v|webm)$/i;
-const MEDIA_FORMAT_REGEXP = new RegExp(
-  `(${SUPPORTED_FORMAT_REGEXP.source})|(${VIDEO_FORMAT_REGEXP.source})`,
-  "i"
-);
+// All three regexps are DERIVED from the shared registry's extension sets, so
+// enrichment can never drift from the gallery again (the old hand-written
+// image regexp had drifted: gif/heic/heif/avif appeared in albums but were
+// never enriched). The exported names are kept — geo.js, visual.js, ocr.js,
+// caption.js, and enrichment-api.js import them. VIDEO stays separate from the
+// image regexp so the image-only enrichers, which gate their applies() on
+// SUPPORTED_FORMAT_REGEXP, keep skipping video by construction — there is no
+// job `type` field; per-enricher applies() IS the dispatcher.
+const {
+  IMAGE_FORMAT_REGEXP: SUPPORTED_FORMAT_REGEXP,
+  VIDEO_FORMAT_REGEXP,
+  MEDIA_FORMAT_REGEXP,
+} = require("rpg-media-types");
 
 /**
  * Recursively walk an image directory and return the supported image files

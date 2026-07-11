@@ -53,7 +53,8 @@ RUN mkdir -p /data/geonames && cd /data/geonames \
     && curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o countryInfo.txt
 
 # Scoped workspace install. The root manifest + the enrichment manifest + the
-# in-tree packages enrichment links (rpg-config, rpg-path-safety) are enough for
+# in-tree packages enrichment links (rpg-config, rpg-path-safety,
+# rpg-media-types) are enough for
 # `--workspace=enrichment` to resolve and install ONLY the enrichment dependency
 # closure — gallery and the other packages are absent from the context and npm
 # tolerates that, so the image stays lean. The linked packages land in
@@ -62,6 +63,7 @@ RUN mkdir -p /data/geonames && cd /data/geonames \
 COPY package.json ./
 COPY packages/config ./packages/config
 COPY packages/path-safety ./packages/path-safety
+COPY packages/media-types ./packages/media-types
 COPY enrichment/package*.json ./enrichment/
 RUN npm install --omit=dev --workspace=enrichment && npm cache clean --force
 
