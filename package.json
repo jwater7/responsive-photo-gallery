@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test -w packages/config -w packages/path-safety -w packages/media-types -w packages/fast-image-processing -w gallery -w enrichment",
+    "test": "npm run test -w packages/config -w packages/path-safety -w packages/media-types -w packages/fast-image-processing -w gallery -w enrichment && npm run test --prefix gallery/frontend",
     "dev:deps": "docker compose -f docker-compose.yml -f docker-compose.deps.yml up -d rpg-redis rpg-meilisearch rpg-enrichment-indexer rpg-enrichment-worker",
     "dev:api": "IMAGE_PATH=./debug-data/pics CONFIG_PATH=./debug-data/config PRIVATE_KEY=nonvolatile CACHE_PATH=./debug-data/cache TAGS_PATH=./debug-data/tags ENRICH_URL=http://localhost:8080 PORT=8000 DEBUG=express,responsive-photo-gallery:* node --watch gallery/bin/www",
     "dev:ui": "cd gallery/frontend && npm run dev",

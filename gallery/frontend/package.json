@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "prettier": "prettier --write \"**/*.+(js|jsx|json)\"",
+    "test": "vitest run",
     "build": "next build",
     "dev": "NEXT_PUBLIC_API_PREFIX=http://localhost:8000/ NEXT_PUBLIC_API_PREFIX_OVERRIDE=/api/ next dev",
     "start": "next start"
@@ -26,7 +27,10 @@
     "yet-another-react-lightbox": "^3.21.7"
   },
   "devDependencies": {
-    "prettier": "^3.8.4"
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.4",
+    "vitest": "^4.1.10"
   },
   "overridesComment": "postcss: Next 16.2.x pins 8.4.31, vulnerable to GHSA-qx2v-qp2m-jg93 (XSS in CSS stringify, build-time only). Forced to patched 8.5.x — semver-compatible and only used by Next's build, so the static export is unaffected.",
   "overrides": {
