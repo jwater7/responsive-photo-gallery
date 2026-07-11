@@ -2,7 +2,6 @@ import Head from 'next/head';
 import styles from '../styles/Home.module.css';
 import { useEffect, useState } from "react";
 import Router from "next/router";
-import API from '../lib/api';
 
 import {
   FormControl,
