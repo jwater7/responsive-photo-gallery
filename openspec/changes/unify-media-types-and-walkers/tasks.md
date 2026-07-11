@@ -71,14 +71,17 @@
 
 ## 5. Fixtures & end-to-end proof
 
-- [ ] 5.1 `gallery/scripts/gen-test-albums.js`: emit an `.m4v` (and `.webm`)
-      fixture alongside the existing media.
-- [ ] 5.2 e2e/unit proof per the album-build-cache delta: an album with all
+- [x] 5.1 `gallery/scripts/gen-test-albums.js`: emit an `.m4v` (and `.webm`)
+      fixture alongside the existing media (default-on: one clip per registry
+      video format; `--no-videos` to skip; warns+skips without ffmpeg).
+- [x] 5.2 e2e/unit proof per the album-build-cache delta: an album with all
       four video formats builds cells for each; assert the manifest contains
-      the `.m4v`/`.webm` cells with `format: video`.
-- [ ] 5.3 Full suites green (config, path-safety, media-types, fip, gallery,
-      enrichment) + `next build`; run a live smoke via the dev stack (album
-      with an `.m4v`, excluded subtree absent from /list).
+      the `.m4v`/`.webm` cells with `format: video`
+      (`gallery/test/album-build-video.test.js`, real ffmpeg, skips without it).
+- [x] 5.3 Full suites green (config 7, path-safety 5, media-types 7, fip 5,
+      gallery 63, enrichment 120) + `next build`; live smoke: real server boot
+      against a scratch tree — /list & /thumbnails omitted the excluded
+      subtree, and the live build gave clip.m4v a `format: video` cell.
 
 ## 6. Docs, deploy notes, and archive prep
 
