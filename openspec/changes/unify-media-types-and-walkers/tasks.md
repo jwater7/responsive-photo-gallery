@@ -85,10 +85,12 @@
 
 ## 6. Docs, deploy notes, and archive prep
 
-- [ ] 6.1 README/docs: document `rpg-media-types` as the format source of
-      truth; note the **BREAKING** excludes behavior of `/list`/`/thumbnails`.
-- [ ] 6.2 Deploy notes (change README or TODO): full scan for newly indexed
+- [x] 6.1 README/docs: document `rpg-media-types` as the format source of
+      truth; note the **BREAKING** excludes behavior of `/list`/`/thumbnails`
+      (README "Supported media formats" section).
+- [x] 6.2 Deploy notes (change README or TODO): full scan for newly indexed
       formats; forced re-hash / cache reap for albums containing
-      `.m4v`/`.webm`; mislocated `.mp4` thumbs self-heal.
-- [ ] 6.3 Update TODO.md item 13 → TODO-DONE.md (and the `/enqueue` minor-list
+      `.m4v`/`.webm`; mislocated `.mp4` thumbs self-heal (TODO-DONE.md deploy
+      note + design.md migration plan).
+- [x] 6.3 Update TODO.md item 13 → TODO-DONE.md (and the `/enqueue` minor-list
       entry) when shipped.

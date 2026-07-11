@@ -65,6 +65,32 @@ that the container entrypoint rewrites at startup, so one image works at any pat
 
 See [Production deployment](#production-deployment) for how these are applied.
 
+## Supported media formats
+
+"What counts as a photo or a video" is defined once, in the shared
+`packages/media-types` (`rpg-media-types`) workspace package: the image/video
+extension sets, the `isImage`/`isVideo`/`isMedia` predicates, the
+extension→MIME map, the filter regexps derived from those same sets, and the
+excludes-aware directory walker every plane uses (album builds,
+`/list`/`/thumbnails`, enrichment scanning). To add a format, add its extension
+and MIME type there — every consumer picks it up with no other code change.
+
+Two support planes are distinct on purpose:
+
+* **Supported** (the registry): the file is walked, listed, served, and gets
+  metadata-only enrichment (geo pin, caption) — e.g. `.heic` GPS is read by
+  exifr regardless of image decoders.
+* **Decodable here** (probed from the running build's sharp at startup):
+  pixel-decoding consumers (sprite/thumbnail rendering, visual tags/embedding,
+  OCR) additionally require an actual decoder. HEIC/HEIF/AVIF depend on how the
+  bundled libvips was built; BMP has no sharp decoder in any build. Files a
+  build can't decode are skipped with a recorded reason (never silently) and
+  are picked up automatically by a later build that can decode them.
+
+**Breaking change (excludes):** files under an admin-excluded directory are now
+absent from `/api/v1/list` and `/api/v1/thumbnails` responses, matching every
+other plane (albums, search, map, enrichment), which already hid them.
+
 ## Image enrichment, search & map
 
 An optional, isolated enrichment plane adds OCR, semantic ("smart") search, and
