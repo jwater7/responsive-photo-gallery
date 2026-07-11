@@ -16,6 +16,7 @@ const config = require("../lib/config");
 const embedder = require("../lib/embedder");
 const labels = require("./visual-labels");
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { isDecodableImage, undecodableError } = require("../lib/decodable");
 
 const debugErr = require("debug")("responsive-photo-gallery:visual:error");
 debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/server.js)
@@ -85,6 +86,13 @@ module.exports = {
   embeds: true,
   applies: (file) => SUPPORTED_FORMAT_REGEXP.test(file.relPath),
   async enrich({ absPath }) {
+    // Capability gate (probed once, no decode attempt): a registry image
+    // format this sharp build can't decode soft-fails with a stable reason —
+    // recorded as `visual_error`, no version stamp — so a later HEIF-capable
+    // build picks the file up on re-scan (see lib/decodable.js).
+    if (!isDecodableImage(absPath)) {
+      return { error: undecodableError(absPath) };
+    }
     const vec = await embedder.embedImage(absPath);
     let tags;
     try {

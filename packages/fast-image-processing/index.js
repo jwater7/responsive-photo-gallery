@@ -26,7 +26,13 @@ const needsSwitched = [5, 6, 7, 8];
 // registry video format (.mov/.mp4/.m4v/.webm) takes the ffmpeg path.
 // (Previously a local .mov/.mp4-only list: .m4v/.webm were fed to sharp,
 // which failed, and sprite builds silently skipped them.)
-const { isVideo } = require('rpg-media-types');
+const { isVideo, decodableImageExts } = require('rpg-media-types');
+
+// Image formats THIS sharp build can decode, probed once at load. ffmpeg
+// covers every registry video, but sharp's coverage depends on how its
+// bundled libvips was built (HEIF/AVIF only when compiled in; BMP never), so
+// renderImageCell fails fast with a clear reason instead of a decode attempt.
+const DECODABLE_IMAGE_EXTS = decodableImageExts(sharp.format);
 
 function cacheThumb(src, dest, width, height, cb) {
 
@@ -352,6 +358,12 @@ async function statOrDefault(src) {
 }
 
 async function renderImageCell(src, size) {
+  const ext = path.extname(src).toLowerCase();
+  if (!DECODABLE_IMAGE_EXTS.has(ext)) {
+    // The album build logs this reason and lists the file in the manifest's
+    // `skipped` — visible, and the rest of the build completes.
+    throw new Error(`no ${ext} decoder in this sharp build`);
+  }
   const { isFile, mtime } = await statOrDefault(src);
   if (!isFile) {
     throw new Error('Source file does not exist');

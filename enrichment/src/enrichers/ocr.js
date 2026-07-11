@@ -9,6 +9,7 @@
  */
 
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { isDecodableImage, undecodableError } = require("../lib/decodable");
 const engine = require("./ocr-engines");
 
 const debugErr = require("debug")("responsive-photo-gallery:ocr:error");
@@ -23,6 +24,12 @@ module.exports = {
   outputFields: ["content", "confidence"],
   applies: (file) => SUPPORTED_FORMAT_REGEXP.test(file.relPath),
   async enrich({ absPath }) {
+    // Capability gate (probed once, no decode attempt): the OCR preprocess
+    // rides on sharp, so a format this build can't decode soft-fails with a
+    // stable reason and self-heals on a capable build (see lib/decodable.js).
+    if (!isDecodableImage(absPath)) {
+      return { content: "", confidence: 0, error: undecodableError(absPath) };
+    }
     try {
       return await engine.recognize(absPath);
     } catch (err) {

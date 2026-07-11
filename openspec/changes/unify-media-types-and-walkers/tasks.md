@@ -57,17 +57,17 @@
 
 ## 4. Capability-aware format support (enrichment + sprite build)
 
-- [ ] 4.1 Add a decoder-capability probe (sharp `format` map, checked once at
+- [x] 4.1 Add a decoder-capability probe (sharp `format` map, checked once at
       module load) exposed for consumers; static: BMP undecodable, HEIF per
-      build.
-- [ ] 4.2 Enrichment `applies()` matrix: geo/caption accept all registry image
+      build (`decodableImageExts` in the registry + `enrichment/src/lib/decodable.js`).
+- [x] 4.2 Enrichment `applies()` matrix: geo/caption accept all registry image
       formats; visual/OCR accept registry image formats ∩ decodable; skipped-
       for-capability files record a reason (soft error or skip marker per
       design decision 5) and self-heal when a capable build runs; tests for
-      both capability outcomes.
-- [ ] 4.3 Sprite build (`renderImageCell` path): undecodable-here images are
+      both capability outcomes (`enrichment/test/capability-gate.test.js`).
+- [x] 4.3 Sprite build (`renderImageCell` path): undecodable-here images are
       skipped with a logged reason (not silently), build completes; test with
-      a `.bmp` fixture.
+      a `.bmp` fixture (`gallery/test/album-build-skip.test.js`).
 
 ## 5. Fixtures & end-to-end proof
 
