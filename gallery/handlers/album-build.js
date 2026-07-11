@@ -55,8 +55,9 @@ const COVER_MAX_CELLS = parseInt(process.env.COVER_MAX_CELLS, 10) || 48
 const COVER_SHEET_COLUMNS = parseInt(process.env.COVER_SHEET_COLUMNS, 10) || 8
 
 // "What counts as media" comes from the shared registry (these sets were its
-// canonical source before it existed — the local copies are gone).
-const { isMedia } = require('rpg-media-types')
+// canonical source before it existed — the local copies are gone), and the
+// traversal itself is the shared excludes-aware walker.
+const { isMedia, walkMedia } = require('rpg-media-types')
 
 // Resolve a caller-supplied album name to an absolute path confined to `root`
 // ('' on traversal or a missing album): the shared containment primitive.
@@ -116,46 +117,11 @@ async function mapLimit(items, limit, fn) {
   return results
 }
 
-// `excludes` is the normalized exclude list (relative to IMAGE_PATH); a subdir
-// whose IMAGE_PATH-relative path matches an excluded prefix is not descended.
-// This is how a *nested* exclude (e.g. "work/scans") drops files from an album
-// that is otherwise still listed/built.
-async function walkMedia(baseDir, dir = baseDir, out = [], excludes = []) {
-  let entries
-  try {
-    entries = await fs.promises.readdir(dir, { withFileTypes: true })
-  } catch (err) {
-    return out
-  }
-  for (const entry of entries) {
-    const abs = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      const relToImage = path
-        .relative(IMAGE_PATH, abs)
-        .split(path.sep)
-        .join('/')
-      if (runtimeConfig.isExcluded(relToImage, excludes)) continue
-      await walkMedia(baseDir, abs, out, excludes)
-    } else if (entry.isFile()) {
-      const rel = path.relative(baseDir, abs)
-      if (!isMedia(rel)) continue
-      try {
-        const stat = await fs.promises.stat(abs)
-        out.push({
-          rel,
-          abs,
-          size: stat.size,
-          mtimeMs: Math.round(stat.mtimeMs),
-        })
-      } catch (err) {
-        // unreadable entry; skip
-      }
-    }
-  }
-  return out
-}
-
 // List an album's media files (sorted) plus a whole-album content hash.
+// The exclude predicate checks the IMAGE_PATH-relative path (the walker hands
+// us album-relative dirs, so prefix the album name); a subdir matching an
+// excluded prefix is not descended. This is how a *nested* exclude (e.g.
+// "work/scans") drops files from an album that is otherwise still listed/built.
 async function scanAlbum(album) {
   const albumDir = safeJoin(IMAGE_PATH, album)
   if (!albumDir) {
@@ -164,7 +130,11 @@ async function scanAlbum(album) {
     throw err
   }
   const excludes = await runtimeConfig.getExcludes()
-  const files = await walkMedia(albumDir, albumDir, [], excludes)
+  const files = await walkMedia(albumDir, {
+    withStats: true,
+    shouldSkipDir: (rel) =>
+      runtimeConfig.isExcluded(`${album}/${rel}`, excludes),
+  })
   files.sort((a, b) => a.rel.localeCompare(b.rel))
   for (const f of files) f.srcHash = md5(`${f.rel}:${f.size}:${f.mtimeMs}`)
   const albumHash = md5(files.map((f) => f.srcHash).join('|'))
@@ -228,10 +198,13 @@ async function quickFingerprint(albumDir) {
     }
     dirSigs.push(`${path.relative(albumDir, dir) || '.'}:${mtimeMs}`)
     for (const entry of entries) {
+      // Same dot-entry rule as the shared walker, so this cheap count can
+      // never disagree with what scanAlbum will actually find.
+      if (entry.name.startsWith('.')) continue
       const abs = path.join(dir, entry.name)
       if (entry.isDirectory()) {
         await walk(abs)
-      } else if (entry.isFile() && isMedia(path.relative(albumDir, abs))) {
+      } else if (entry.isFile() && isMedia(entry.name)) {
         count++
       }
     }

@@ -26,23 +26,21 @@ const { resolveWithin: sanitizeToRoot } = require('rpg-path-safety')
 // Video thumbs cache under video-thumbs/ (fip appends an image extension to
 // the dest). Selected by the shared registry predicate — the old '.mov'-only
 // extension test mislocated .mp4/.m4v/.webm thumbs under thumbs/.
-const { isVideo } = require('rpg-media-types')
+// walkMedia replaces the old local sync walker, which ignored the admin
+// exclude list — /list and /thumbnails kept serving excluded subtrees that
+// every other plane (albums, search, enrichment) already hid.
+const { isVideo, walkMedia } = require('rpg-media-types')
 
-const walkDir = (basedir, dir = '.', filelist = []) => {
-  let files = fs.readdirSync(path.join(basedir, dir))
-  files.forEach((file) => {
-    try {
-      let stat = fs.statSync(path.join(basedir, dir, file))
-      if (stat.isDirectory()) {
-        filelist = walkDir(basedir, path.join(dir, file), filelist)
-      } else {
-        filelist.push(path.join(dir, file))
-      }
-    } catch (e) {
-      //ignore failed stat, not a directory or file, probably failed symlink
-    }
+// Album-relative media files for /list & /thumbnails, honoring admin excludes.
+// The exclude list is IMAGE_PATH-relative, so prefix the album onto the
+// walker's album-relative dir paths (same as album-build's scan).
+const listAlbumFiles = async (albumPath, album) => {
+  const excludes = await runtimeConfig.getExcludes()
+  const files = await walkMedia(albumPath, {
+    shouldSkipDir: (rel) =>
+      runtimeConfig.isExcluded(`${album}/${rel}`, excludes),
   })
-  return filelist
+  return files.map((f) => f.rel)
 }
 
 const getThumbBuffer = (image_path, thumb_path, thumb, _cb) => {
@@ -337,92 +335,92 @@ class imageHandler {
         )
       }
 
-      let files = walkDir(album_path)
-
-      // No files to loop on
-      if (!files.length) {
-        return _cb({
-          error: {
-            code: 500,
-            message: 'No Files Processed',
-          },
-        })
-      }
-
-      // Process only a subset if requested
-      if (num_results) {
-        const n = sanitizeNumResults(num_results)
-        if (n === null) {
-          return _cb({
-            error: { code: 400, message: 'Invalid num_results' },
-          })
-        }
-        files = limitResults(files, n, distributed)
-      }
-
       let images = {}
-      Promise.map(
-        files,
-        (file) => {
-          const san_thumb = sanitize(thumb)
-          const image_path = path.join(album_path, file)
-          let thumb_path = sanitizeToRoot(
-            this.cachePath,
-            path.join(album, 'thumbs', thumb, file)
-          )
-          if (isVideo(file)) {
-            thumb_path = sanitizeToRoot(
-              this.cachePath,
-              path.join(album, 'video-thumbs', thumb, file)
-            )
-          }
-          return new Promise((resolve, reject) => {
-            getThumbBuffer(
-              image_path,
-              thumb_path,
-              san_thumb,
-              (err, thumb_buffer, thumb_content_type) => {
-                if (err) {
-                  debugErr(err)
-                  return resolve()
-                }
-                images[file] = {
-                  // TODO: these are not necessarily png files
-                  base64tag:
-                    'data:' +
-                    thumb_content_type +
-                    ';base64,' +
-                    thumb_buffer.toString('base64'),
-                }
-                return resolve()
-              }
-            )
-          })
-        },
-        { concurrency: 16 }
-      )
-        .then(() => {
-          if (Object.keys(images).length === 0) {
-            return _cb({
-              error: {
-                code: 500,
-                message: 'No Images Processed',
-              },
-            })
-          }
-          return _cb({
-            result: images,
-          })
-        })
-        .catch((err) => {
-          debugErr(err.stack)
+      Promise.resolve(listAlbumFiles(album_path, album)).then((files) => {
+        // No files to loop on
+        if (!files.length) {
           return _cb({
             error: {
               code: 500,
-              message: 'Internal error: ' + err,
+              message: 'No Files Processed',
             },
           })
-        })
+        }
+
+        // Process only a subset if requested
+        if (num_results) {
+          const n = sanitizeNumResults(num_results)
+          if (n === null) {
+            return _cb({
+              error: { code: 400, message: 'Invalid num_results' },
+            })
+          }
+          files = limitResults(files, n, distributed)
+        }
+
+        Promise.map(
+          files,
+          (file) => {
+            const san_thumb = sanitize(thumb)
+            const image_path = path.join(album_path, file)
+            let thumb_path = sanitizeToRoot(
+              this.cachePath,
+              path.join(album, 'thumbs', thumb, file)
+            )
+            if (isVideo(file)) {
+              thumb_path = sanitizeToRoot(
+                this.cachePath,
+                path.join(album, 'video-thumbs', thumb, file)
+              )
+            }
+            return new Promise((resolve, reject) => {
+              getThumbBuffer(
+                image_path,
+                thumb_path,
+                san_thumb,
+                (err, thumb_buffer, thumb_content_type) => {
+                  if (err) {
+                    debugErr(err)
+                    return resolve()
+                  }
+                  images[file] = {
+                    // TODO: these are not necessarily png files
+                    base64tag:
+                      'data:' +
+                      thumb_content_type +
+                      ';base64,' +
+                      thumb_buffer.toString('base64'),
+                  }
+                  return resolve()
+                }
+              )
+            })
+          },
+          { concurrency: 16 }
+        )
+          .then(() => {
+            if (Object.keys(images).length === 0) {
+              return _cb({
+                error: {
+                  code: 500,
+                  message: 'No Images Processed',
+                },
+              })
+            }
+            return _cb({
+              result: images,
+            })
+          })
+          .catch((err) => {
+            debugErr(err.stack)
+            return _cb({
+              error: {
+                code: 500,
+                message: 'Internal error: ' + err,
+              },
+            })
+          })
+      })
     })
   }
 
@@ -455,117 +453,118 @@ class imageHandler {
 
       const album_path = path.join(this.imagePath, album)
       const albumTagsPath = sanitizeToRoot(this.tagsPath, album)
-      let files = walkDir(album_path)
-
-      // No files to loop on
-      if (!files.length) {
-        return _cb({
-          error: {
-            code: 500,
-            message: 'No Files Processed',
-          },
-        })
-      }
-
-      // Process only a subset if requested
-      if (num_results) {
-        const n = sanitizeNumResults(num_results)
-        if (n === null) {
-          return _cb({
-            error: { code: 400, message: 'Invalid num_results' },
-          })
-        }
-        files = limitResults(files, n, distributed)
-      }
 
       let images = {}
-      Promise.map(
-        files,
-        (file) => {
-          const image_path = path.join(album_path, file)
-
-          return Promise.resolve().then(async () => {
-            let image_metadata
-            try {
-              image_metadata = await new Promise((resolve, reject) =>
-                imageProcessing.getMetadata(
-                  image_path,
-                  (err, imageMetadata) => {
-                    if (err) {
-                      return reject(err)
-                    }
-                    return resolve(imageMetadata)
-                  }
-                )
-              )
-            } catch (err) {
-              debugErr(err)
-              return
-            }
-
-            // Description comes from an optional sidecar "<file>.txt" next to the
-            // image. When absent, leave it unset rather than falling back to the
-            // filename (the filename is already the title in the UI).
-            try {
-              const desc = (
-                await fs.promises.readFile(image_path + '.txt', 'utf8')
-              ).trim()
-              if (desc) image_metadata['description'] = desc
-            } catch (_) {
-              // no sidecar description; leave it unset
-            }
-            if (withMetadata && Array.isArray(withMetadata.tags)) {
-              // TODO unique
-              image_metadata['tags'] = await withMetadata.tags.reduce(
-                async (acc, unsanTag) => {
-                  // An async reducer's accumulator is a PROMISE from the 2nd
-                  // iteration on — it must be awaited before spreading (the
-                  // same `await acc` the updateImageData reducers use), or a
-                  // 2+ tag request throws "acc is not iterable" → 500.
-                  const tags = await acc
-                  const tag = sanitize(unsanTag)
-                  const albumTagImagePath = sanitizeToRoot(
-                    albumTagsPath,
-                    path.join(tag, file)
-                  )
-                  try {
-                    await fs.promises.stat(albumTagImagePath)
-                  } catch (err) {
-                    return tags
-                  }
-                  return [...tags, tag]
-                },
-                []
-              )
-            }
-            images[file] = image_metadata
-            return
-          })
-        },
-        { concurrency: 16 }
-      )
-        .then(() => {
-          if (Object.keys(images).length === 0) {
-            return _cb({
-              error: {
-                code: 500,
-                message: 'No Images Processed',
-              },
-            })
-          }
-          return _cb({
-            result: images,
-          })
-        })
-        .catch((err) => {
-          debugErr(err.stack)
+      Promise.resolve(listAlbumFiles(album_path, album)).then((files) => {
+        // No files to loop on
+        if (!files.length) {
           return _cb({
             error: {
               code: 500,
-              message: 'Internal error: ' + err,
+              message: 'No Files Processed',
             },
           })
-        })
+        }
+
+        // Process only a subset if requested
+        if (num_results) {
+          const n = sanitizeNumResults(num_results)
+          if (n === null) {
+            return _cb({
+              error: { code: 400, message: 'Invalid num_results' },
+            })
+          }
+          files = limitResults(files, n, distributed)
+        }
+
+        Promise.map(
+          files,
+          (file) => {
+            const image_path = path.join(album_path, file)
+
+            return Promise.resolve().then(async () => {
+              let image_metadata
+              try {
+                image_metadata = await new Promise((resolve, reject) =>
+                  imageProcessing.getMetadata(
+                    image_path,
+                    (err, imageMetadata) => {
+                      if (err) {
+                        return reject(err)
+                      }
+                      return resolve(imageMetadata)
+                    }
+                  )
+                )
+              } catch (err) {
+                debugErr(err)
+                return
+              }
+
+              // Description comes from an optional sidecar "<file>.txt" next to the
+              // image. When absent, leave it unset rather than falling back to the
+              // filename (the filename is already the title in the UI).
+              try {
+                const desc = (
+                  await fs.promises.readFile(image_path + '.txt', 'utf8')
+                ).trim()
+                if (desc) image_metadata['description'] = desc
+              } catch (_) {
+                // no sidecar description; leave it unset
+              }
+              if (withMetadata && Array.isArray(withMetadata.tags)) {
+                // TODO unique
+                image_metadata['tags'] = await withMetadata.tags.reduce(
+                  async (acc, unsanTag) => {
+                    // An async reducer's accumulator is a PROMISE from the 2nd
+                    // iteration on — it must be awaited before spreading (the
+                    // same `await acc` the updateImageData reducers use), or a
+                    // 2+ tag request throws "acc is not iterable" → 500.
+                    const tags = await acc
+                    const tag = sanitize(unsanTag)
+                    const albumTagImagePath = sanitizeToRoot(
+                      albumTagsPath,
+                      path.join(tag, file)
+                    )
+                    try {
+                      await fs.promises.stat(albumTagImagePath)
+                    } catch (err) {
+                      return tags
+                    }
+                    return [...tags, tag]
+                  },
+                  []
+                )
+              }
+              images[file] = image_metadata
+              return
+            })
+          },
+          { concurrency: 16 }
+        )
+          .then(() => {
+            if (Object.keys(images).length === 0) {
+              return _cb({
+                error: {
+                  code: 500,
+                  message: 'No Images Processed',
+                },
+              })
+            }
+            return _cb({
+              result: images,
+            })
+          })
+          .catch((err) => {
+            debugErr(err.stack)
+            return _cb({
+              error: {
+                code: 500,
+                message: 'Internal error: ' + err,
+              },
+            })
+          })
+      })
     })
   }
 

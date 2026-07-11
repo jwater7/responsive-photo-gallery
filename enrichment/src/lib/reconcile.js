@@ -52,7 +52,7 @@ async function enqueueAll(type = "full", { force = false, path = null } = {}) {
   // directory-prefix matcher to keep only in-scope files. normalize canonicalizes
   // to the stored POSIX form and strips any '.'/'..' so it can't traverse.
   const scopePath = path ? normalize([path])[0] || null : null;
-  let files = walkDir(config.imagePath);
+  let files = await walkDir(config.imagePath);
   if (scopePath) files = files.filter((f) => isExcluded(f.relPath, [scopePath]));
 
   // The delta pre-filter skips up-to-date files BEFORE they reach the pipeline
@@ -165,7 +165,7 @@ async function runControl(action, { force = false, path = null } = {}) {
  * via its own dir-fingerprint and isn't touched here.
  */
 async function reap() {
-  const files = walkDir(config.imagePath);
+  const files = await walkDir(config.imagePath);
   if (files.length === 0) {
     // Almost always a mount glitch (walkDir swallows readdir errors), not a
     // genuinely empty library — refuse to wipe the index.

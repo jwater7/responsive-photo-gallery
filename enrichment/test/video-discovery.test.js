@@ -34,8 +34,8 @@ for (const rel of onDisk) {
   fs.writeFileSync(abs, "x");
 }
 
-test("walker collects images AND videos, skips non-media", () => {
-  const got = walkDir(base).map((f) => f.relPath).sort();
+test("walker collects images AND videos, skips non-media", async () => {
+  const got = (await walkDir(base)).map((f) => f.relPath).sort();
   assert.deepStrictEqual(got, [
     "trip/clip.m4v",
     "trip/clip.mov",

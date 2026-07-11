@@ -36,44 +36,42 @@ for (const rel of files) {
   fs.writeFileSync(abs, "x");
 }
 
-const relPaths = (excludes) =>
-  walkDir(base, "", [], excludes)
-    .map((f) => f.relPath)
-    .sort();
+const relPaths = async (excludes) =>
+  (await walkDir(base, { excludes })).map((f) => f.relPath).sort();
 
-test("top-level prefix exclude hides the whole subtree", () => {
-  const got = relPaths(["private"]);
+test("top-level prefix exclude hides the whole subtree", async () => {
+  const got = await relPaths(["private"]);
   assert.ok(!got.some((p) => p === "private" || p.startsWith("private/")));
   assert.ok(got.includes("keep/a.jpg"));
 });
 
-test("nested prefix exclude hides only the subtree", () => {
-  const got = relPaths(["work/scans"]);
+test("nested prefix exclude hides only the subtree", async () => {
+  const got = await relPaths(["work/scans"]);
   assert.ok(got.includes("work/c.jpg")); // sibling still walked
   assert.ok(!got.includes("work/scans/d.jpg")); // nested excluded
 });
 
-test("partial-name is NOT a match (work must not exclude workshop)", () => {
-  const got = relPaths(["work"]);
+test("partial-name is NOT a match (work must not exclude workshop)", async () => {
+  const got = await relPaths(["work"]);
   assert.ok(!got.some((p) => p.startsWith("work/")));
   assert.ok(got.includes("workshop/e.jpg")); // distinct top-level kept
 });
 
-test("missing excludes.json => walk everything (fail-open)", () => {
+test("missing excludes.json => walk everything (fail-open)", async () => {
   fs.rmSync(EXCLUDES_FILE, { force: true });
-  const got = walkDir(base).map((f) => f.relPath); // loads from file (none)
+  const got = (await walkDir(base)).map((f) => f.relPath); // loads from file (none)
   assert.strictEqual(got.length, files.length);
 });
 
-test("garbage excludes.json => walk everything (fail-open)", () => {
+test("garbage excludes.json => walk everything (fail-open)", async () => {
   fs.writeFileSync(EXCLUDES_FILE, "{ not json");
-  const got = walkDir(base).map((f) => f.relPath);
+  const got = (await walkDir(base)).map((f) => f.relPath);
   assert.strictEqual(got.length, files.length);
 });
 
-test("valid excludes.json on disk is honored by a top-level walk", () => {
+test("valid excludes.json on disk is honored by a top-level walk", async () => {
   fs.writeFileSync(EXCLUDES_FILE, JSON.stringify({ excludes: ["private"] }));
-  const got = walkDir(base).map((f) => f.relPath);
+  const got = (await walkDir(base)).map((f) => f.relPath);
   assert.ok(!got.some((p) => p.startsWith("private")));
   assert.strictEqual(got.length, files.length - 1);
 });

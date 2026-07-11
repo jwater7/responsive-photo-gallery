@@ -2,16 +2,16 @@
 
 ## 1. The rpg-media-types package
 
-- [ ] 1.1 Create `packages/media-types` (`rpg-media-types`): IMAGE_EXTS /
+- [x] 1.1 Create `packages/media-types` (`rpg-media-types`): IMAGE_EXTS /
       VIDEO_EXTS sets (canonical = album-build's current broadest list),
       `isImage`/`isVideo`/`isMedia`, extension→MIME map + `mimeFor`, and
       `extsToRegexp`-derived SUPPORTED/VIDEO/MEDIA regexps; unit tests for the
       predicates, map, and regexp derivation.
-- [ ] 1.2 Add the shared excludes-aware async walker to the package:
+- [x] 1.2 Add the shared excludes-aware async walker to the package:
       dirent-based, skips dot-entries and failed stats, filters by the
       registry, takes `shouldSkipDir(relPath)`; unit tests against a fixture
       tree (dotfiles, broken symlink, nested exclude dir, mixed formats).
-- [ ] 1.3 Wire the package: root test script `-w packages/media-types`,
+- [x] 1.3 Wire the package: root test script `-w packages/media-types`,
       dependency in `gallery/package.json`, `enrichment/package.json`, and
       `packages/fast-image-processing/package.json`; add the COPY line to
       `enrichment/Dockerfile` (gallery's image copies `packages/` wholesale);
@@ -19,40 +19,41 @@
 
 ## 2. Registry consumers (format lists)
 
-- [ ] 2.1 `packages/fast-image-processing`: replace the local `isVideo`
+- [x] 2.1 `packages/fast-image-processing`: replace the local `isVideo`
       (`.mov`/`.mp4` only) with the registry predicate; drop the TODO comment;
       verify `renderCell`/`cacheThumb` dispatch `.m4v`/`.webm` to ffmpeg.
-- [ ] 2.2 `gallery/handlers/album-build.js`: replace IMAGE_EXTS/VIDEO_EXTS and
+- [x] 2.2 `gallery/handlers/album-build.js`: replace IMAGE_EXTS/VIDEO_EXTS and
       `isMedia` with registry imports.
-- [ ] 2.3 `enrichment/src/lib/walk-dir.js`: derive SUPPORTED/VIDEO/MEDIA
+- [x] 2.3 `enrichment/src/lib/walk-dir.js`: derive SUPPORTED/VIDEO/MEDIA
       regexps from the registry (keep the exported names — geo.js, visual.js,
       ocr.js, caption.js, enrichment-api.js import them).
-- [ ] 2.4 `enrichment/src/lib/hash.js`: replace MIME_BY_EXT with the
+- [x] 2.4 `enrichment/src/lib/hash.js`: replace MIME_BY_EXT with the
       registry's `mimeFor`.
-- [ ] 2.5 `gallery/handlers/image-handler.js`: replace the three `.mov`-only
+- [x] 2.5 `gallery/handlers/image-handler.js`: replace the three `.mov`-only
       video-thumb cache-path special cases (image(), thumbnails() single +
       batch) with the registry's `isVideo`; batch copy also switches its raw
       `path.join` to `sanitizeToRoot` (deferred note from review item 12).
-- [ ] 2.6 `enrichment/src/routes/enrichment-api.js`: `/enqueue` validates with
+- [x] 2.6 `enrichment/src/routes/enrichment-api.js`: `/enqueue` validates with
       MEDIA_FORMAT_REGEXP instead of the image-only pattern.
 
 ## 3. Walker consolidation
 
-- [ ] 3.1 `gallery/handlers/album-build.js`: replace `walkMedia` with the
+- [x] 3.1 `gallery/handlers/album-build.js`: replace `walkMedia` with the
       shared walker (exclude predicate from `runtimeConfig`
       getExcludes/isExcluded, preserving the nested-exclude relative-path
       semantics its comment documents).
-- [ ] 3.2 `enrichment/src/lib/walk-dir.js`: reimplement its walk on the shared
+- [x] 3.2 `enrichment/src/lib/walk-dir.js`: reimplement its walk on the shared
       walker (exclude predicate from rpg-config's fail-open `loadExcludes`),
       keeping the module's public API for its callers.
-- [ ] 3.3 `gallery/handlers/image-handler.js`: replace the sync `walkDir` with
+- [x] 3.3 `gallery/handlers/image-handler.js`: replace the sync `walkDir` with
       the shared walker (now excludes-aware) inside list()/thumbnails(); keep
       handler callback contracts and error codes unchanged.
-- [ ] 3.4 Walker-parity tests: one fixture tree exercised through all three
+- [x] 3.4 Walker-parity tests: one fixture tree exercised through all three
       consumers asserting identical inclusion/exclusion (dot-entries, broken
       symlink, nested exclude, every registry format).
-- [ ] 3.5 Extend `gallery/test/list-params.test.js` (or a sibling) with an
-      excluded-subtree fixture: `/list` and `/thumbnails` omit excluded files.
+- [x] 3.5 Extend `gallery/test/list-params.test.js` (or a sibling) with an
+      excluded-subtree fixture: `/list` and `/thumbnails` omit excluded files
+      (sibling file `gallery/test/excludes-list.test.js`).
 
 ## 4. Capability-aware format support (enrichment + sprite build)
 
