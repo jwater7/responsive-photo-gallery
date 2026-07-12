@@ -113,6 +113,9 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
   // resolves to is derived from the current layer each render (see openCell below),
   // so it follows the location across zoom instead of going stale.
   const [openAnchor, setOpenAnchor] = useState(null);
+  // Leaflet Popup instance, for re-measuring after CellPhotos' async first page
+  // grows the popup (see onFirstPage below).
+  const popupRef = useRef(null);
   const timer = useRef(null);
   const deepLinkDone = useRef(false);
   // Monotonic id of the newest refresh. Thumbnail mode is two sequential
@@ -254,6 +257,7 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
 
       {openCell && (
         <Popup
+          ref={popupRef}
           position={[openCell.center.lat, openCell.center.lng]}
           closeButton={false}
           autoClose={false}
@@ -273,6 +277,11 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
             excludeInferred={excludeInferred}
             onOpen={openImage}
             onClose={() => setOpenAnchor(null)}
+            // The popup opened (and auto-panned) around the small "Loading…"
+            // box; when the async first page grows it, Leaflet must re-measure
+            // and auto-pan again or the popup's top sits clipped off-screen
+            // until the next map move re-renders it.
+            onFirstPage={() => popupRef.current && popupRef.current.update()}
           />
         </Popup>
       )}

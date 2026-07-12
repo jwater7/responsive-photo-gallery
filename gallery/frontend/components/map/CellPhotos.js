@@ -5,7 +5,7 @@
 // browsable via offset paging — not capped at a viewport sample. Reuses the
 // infinite-scroll shape from pages/search.js. Fixed size; the scroll area pages.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { geoSearch } from '../../lib/enrich-api';
 import { imageurl } from '../../lib/api';
@@ -21,18 +21,24 @@ const MAXH = 5 * THUMB_PX + 4 * GAP;
 
 export const CELL_POPUP_WIDTH = W;
 
-export default function CellPhotos({ resolution, cell, count, excludeInferred, onOpen, onClose }) {
+export default function CellPhotos({ resolution, cell, count, excludeInferred, onOpen, onClose, onFirstPage }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const offsetRef = useRef(0);
+  // Re-entry guard must be a ref, not the `loading` state: the mount fetch and
+  // the IntersectionObserver's initial callback can both fire from the same
+  // render, where both closures still see loading=false — the two page-0
+  // requests then both append (duplicated grid) and double-advance the offset.
+  const inFlightRef = useRef(false);
   const docsRef = useRef([]);
   useEffect(() => {
     docsRef.current = docs;
   }, [docs]);
 
   const loadMore = useCallback(async () => {
-    if (loading || done) return;
+    if (inFlightRef.current || done) return;
+    inFlightRef.current = true;
     setLoading(true);
     try {
       const r = await geoSearch({
@@ -48,9 +54,10 @@ export default function CellPhotos({ resolution, cell, count, excludeInferred, o
     } catch {
       setDone(true);
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
-  }, [resolution, cell, excludeInferred, loading, done]);
+  }, [resolution, cell, excludeInferred, done]);
 
   // First page on mount. The popup is remounted per cell (keyed), so this is a
   // one-shot fetch of page 0.
@@ -58,6 +65,21 @@ export default function CellPhotos({ resolution, cell, count, excludeInferred, o
     loadMore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Leaflet measured (and auto-panned for) the popup when it opened around the
+  // small "Loading…" box; the grid arriving here grows the popup upward inside
+  // a React portal, which Leaflet can't see — near the top of the viewport the
+  // header/close button end up clipped off-screen. Signal the parent to call
+  // popup.update() (re-measure + auto-pan) once the first page is in the DOM.
+  // Once is enough: the grid's height is final after page 0 (it caps at 5 rows
+  // and scrolls), so later pages can't yank the map mid-scroll. Layout effect,
+  // so the re-measure sees the grown grid before paint.
+  const sizedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (sizedRef.current || !docs.length) return;
+    sizedRef.current = true;
+    if (onFirstPage) onFirstPage();
+  }, [docs.length, onFirstPage]);
 
   const sentinelRef = useRef(null);
   useEffect(() => {
