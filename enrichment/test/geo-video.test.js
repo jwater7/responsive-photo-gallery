@@ -41,6 +41,7 @@ require.cache[gnPath] = {
   exports: {
     reverse: () => ({ city: "Tacoma", region: "Washington", country: "United States" }),
     loadOnce: () => {},
+    placeString: (p) => (p ? [p.city, p.region, p.country].filter(Boolean).join(", ") : ""),
   },
 };
 
@@ -146,15 +147,17 @@ test("manual pin + failed extraction → soft error (retried), pin cells still d
   );
 });
 
-test("applies() dispatcher: geo opts into image+video; image-only enrichers skip video", () => {
-  assert.strictEqual(geo.applies({ relPath: "a/clip.mov" }), true);
-  assert.strictEqual(geo.applies({ relPath: "a/clip.mp4" }), true);
-  assert.strictEqual(geo.applies({ relPath: "a/photo.jpg" }), true);
-
-  for (const e of [ocr, caption]) {
-    assert.strictEqual(e.applies({ relPath: "a/clip.mov" }), false, `${e.name} must skip video`);
+test("applies() dispatcher: geo/ocr opt into image+video; caption stays image-only", () => {
+  // Since add-video-embeddings-and-search-filter, ocr (and visual — exercised
+  // in visual-video.test.js) handle video via keyframes; caption remains
+  // image-only (videos carry no embedded caption metadata worth parsing).
+  for (const e of [geo, ocr]) {
+    assert.strictEqual(e.applies({ relPath: "a/clip.mov" }), true, `${e.name} must handle video`);
+    assert.strictEqual(e.applies({ relPath: "a/clip.mp4" }), true, `${e.name} must handle video`);
     assert.strictEqual(e.applies({ relPath: "a/photo.jpg" }), true, `${e.name} must handle image`);
   }
-  // The gate ocr/visual/caption share: image-only, never matches video.
+  assert.strictEqual(caption.applies({ relPath: "a/clip.mov" }), false, "caption must skip video");
+  assert.strictEqual(caption.applies({ relPath: "a/photo.jpg" }), true, "caption must handle image");
+  // The image-only gate caption uses: never matches video.
   assert.strictEqual(SUPPORTED_FORMAT_REGEXP.test("a/clip.mov"), false);
 });

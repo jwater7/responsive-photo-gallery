@@ -82,11 +82,47 @@ module.exports = {
   // Hybrid search blend when the caller doesn't specify (0 = keyword only,
   // 1 = semantic only).
   defaultSemanticRatio: parseFloat(process.env.DEFAULT_SEMANTIC_RATIO || "0.5"),
+  // --- Smart-search relative cutoff (`smartCutoff` on /search) --------------
+  // CLIP-style text→image ranking scores carry almost no MAGNITUDE signal:
+  // measured (2026-07-03 prod, 2026-07-11 fixtures), all semantic scores live
+  // in a flat ~0.60-0.64 band and genuine matches beat the junk band by only
+  // 0.001-0.013 — which is why the old absolute rankingScoreThreshold (0.62)
+  // returned 0-4 hits or everything. The replacement trims RELATIVE to the
+  // best hit, bounded on both sides:
+  //   window — keep hits scoring within this of the top. 0.02 ≈ 2× the
+  //     largest genuine-match margin observed (so trailing real matches are
+  //     never cut) while below the measured junk-band width (~0.03).
+  //   min — always keep at least this many by rank: a keyword-matched hit
+  //     scores ~1.0 and would otherwise window away every semantic hit.
+  //     24 ≈ a few grid rows of "best guesses".
+  //   max — hard cap: in the flat-curve regime (no distinct top) smart search
+  //     degrades to "the N best matches, ranked" instead of re-ordering the
+  //     entire library; 200 = two search-page fetches. Must stay ≤ the
+  //     MANUAL_SORT_MAX (1000) working-set fetch.
+  smartCutoffWindow: parseFloat(process.env.SMART_CUTOFF_WINDOW || "0.02"),
+  smartMinResults: intEnv("SMART_MIN_RESULTS", 24),
+  smartMaxResults: intEnv("SMART_MAX_RESULTS", 200),
   // Zero-shot tagging: softmax temperature scale over labels, min probability,
   // and max tags per image.
   tagScale: parseFloat(process.env.TAG_SCALE || "50"),
   tagThreshold: parseFloat(process.env.TAG_THRESHOLD || "0.05"),
   maxTags: intEnv("MAX_TAGS", 6),
+
+  // --- Video keyframes (CLIP embeddings + OCR on frames) --------------------
+  // Frames sampled per video. Sample points are spread evenly across the middle
+  // 60% of the clip (20%→80%): the edges are skipped because intros/outros and
+  // fade-to-black frames are the least representative content, and 3 is the
+  // smallest count that still covers beginning/middle/end distinctly. Each
+  // frame costs one 4K seek+decode plus one CLIP embed and one OCR pass, so
+  // this knob is the per-video cost dial.
+  videoFrameCount: intEnv("VIDEO_EMBED_FRAMES", 3),
+  // Hard wall-clock cap (ms) per ffprobe/ffmpeg subprocess (child killed on
+  // expiry). Derived: a single-keyframe seek+decode of a 4K clip on the slowest
+  // supported host (FX-6300-class, software decode only) measures in the tens
+  // of seconds worst case; 60s gives ~3x headroom while still reclaiming a
+  // wedged process — a corrupt/truncated container hanging ffmpeg forever is
+  // the known failure mode this guards (cf. OCR_TIMEOUT_MS). 0 disables.
+  videoSubprocessTimeoutMs: intEnv("VIDEO_FFMPEG_TIMEOUT_MS", 60000),
 
   // --- Geo (EXIF + offline reverse geocoding) -------------------------------
   // GeoNames dumps bundled into the image at build time (no runtime network).

@@ -67,6 +67,12 @@ const MIME_BY_EXT = {
 
 const mimeFor = (p) => MIME_BY_EXT[extOf(p)] || 'application/octet-stream'
 
+// Every MIME type a registry video can carry (deduped — .mov and .mp4 map to
+// distinct types but a future extension may alias an existing one). Consumers
+// filtering docs by kind (e.g. the search API's excludeVideos) derive from
+// this, so a new registry format is covered with no filter-code change.
+const VIDEO_MIME_TYPES = [...new Set([...VIDEO_EXTS].map((e) => MIME_BY_EXT[e]))]
+
 /**
  * Derive a case-insensitive filename filter regexp from an extension set, so
  * regexp consumers (enrichment applies() gates, the watcher, /enqueue) stay in
@@ -192,6 +198,7 @@ module.exports = {
   isMedia,
   MIME_BY_EXT,
   mimeFor,
+  VIDEO_MIME_TYPES,
   extsToRegexp,
   IMAGE_FORMAT_REGEXP,
   VIDEO_FORMAT_REGEXP,

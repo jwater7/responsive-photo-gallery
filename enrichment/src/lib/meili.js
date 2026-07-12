@@ -49,6 +49,10 @@ async function init() {
         // Per-stage failure markers, so the "broken enrichments" list is
         // queryable, e.g. filter `ocr_error IS NOT NULL`. See TODO Enrichment #9.
         "ocr_error", "visual_error", "geo_error", "caption_error",
+        // Media kind, so search can exclude videos (`excludeVideos` →
+        // `NOT mime_type IN [<registry video MIMEs>]`). Docs from before this
+        // base field existed are backfilled by the scan (see pipeline.runFile).
+        "mime_type",
         // H3 cell ids per resolution (`cell_r<res>`), faceted for the map's
         // server-side density counts. See lib/geo-cells.js.
         ...geoCells.cellFieldNames(),

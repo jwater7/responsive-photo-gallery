@@ -19,6 +19,8 @@
 const { execFile } = require("child_process");
 const { promisify } = require("util");
 
+const config = require("./config");
+
 const execFileAsync = promisify(execFile);
 
 /**
@@ -86,7 +88,14 @@ async function probe(absPath) {
     const { stdout } = await execFileAsync(
       "ffprobe",
       ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", absPath],
-      { maxBuffer: 10 * 1024 * 1024 }
+      // timeout: a corrupt/truncated container can wedge ffprobe forever;
+      // kill hard and let the stage soft-fail (same cap as the ffmpeg frame
+      // extraction — see config.videoSubprocessTimeoutMs).
+      {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: config.videoSubprocessTimeoutMs || undefined,
+        killSignal: "SIGKILL",
+      }
     );
     return JSON.parse(stdout);
   } catch (err) {

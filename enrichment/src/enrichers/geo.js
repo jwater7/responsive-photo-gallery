@@ -41,7 +41,7 @@ const isVideo = (relPath) => VIDEO_FORMAT_REGEXP.test(relPath);
 /** Write the searchable place hierarchy ({ city, region, country }) onto `out`. */
 function setPlace(out, place) {
   if (!place) return;
-  out.place = [place.city, place.region, place.country].filter(Boolean).join(", ");
+  out.place = geonames.placeString(place);
   out.place_city = place.city;
   out.place_country = place.country;
 }

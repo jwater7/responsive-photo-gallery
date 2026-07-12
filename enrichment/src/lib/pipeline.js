@@ -158,6 +158,12 @@ async function runFile(file, { force = false } = {}) {
       const mtime = fileMtime(file.absPath);
       if (existing.file_size !== size) update.file_size = size;
       if (existing.last_modified !== mtime) update.last_modified = mtime;
+      // Backfill: mime_type joined the base fields after older docs were
+      // created, and the search API's excludeVideos filter needs it (its
+      // NOT-form tolerates the gap, but only until someone writes a positive
+      // filter). Stamped here so one scan self-heals the index; the write is
+      // vector-safe via the needsEmbedOptOut guard below.
+      if (!existing.mime_type) update.mime_type = mimeFor(file.relPath);
     }
   }
 
@@ -171,8 +177,9 @@ async function runFile(file, { force = false } = {}) {
     // embedding stage whose stored vector Meili dropped counts as stale even if
     // its `embedded` marker survived, so a purged embedding self-heals instead of
     // being skipped forever (see embeddingLost).
+    const forced = isForced(force, enricher);
     if (
-      !isForced(force, enricher) &&
+      !forced &&
       !embeddingLost(enricher, existing, config.embedderName) &&
       isCurrent(existing, enricher)
     ) {
@@ -189,7 +196,10 @@ async function runFile(file, { force = false } = {}) {
     };
     try {
       const t0 = process.hrtime.bigint();
-      const fields = (await enricher.enrich({ file, hash, absPath: file.absPath, existing })) || {};
+      // `forced` lets an enricher distinguish an operator Force (full
+      // recompute) from a version-bump refresh (may reuse derived state,
+      // e.g. visual's stored-embedding tag recompute).
+      const fields = (await enricher.enrich({ file, hash, absPath: file.absPath, existing, forced })) || {};
       debugTiming("%s %dms %s", enricher.name, Math.round(Number(process.hrtime.bigint() - t0) / 1e6), file.relPath);
       // An enricher may report a soft failure via an `error` field while still
       // returning (usually empty) output — treat that like a thrown failure, but

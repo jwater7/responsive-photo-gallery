@@ -16,7 +16,9 @@ const geonames = require("../lib/geonames");
 const geoCells = require("../lib/geo-cells");
 const path = require("path");
 const { MEDIA_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { VIDEO_MIME_TYPES } = require("rpg-media-types");
 const { MANUAL_SORT_MAX, sortHitsByKeys } = require("../lib/search-sort");
+const { applySmartCutoff } = require("../lib/smart-cutoff");
 const { needsEmbedOptOut } = require("../lib/pipeline");
 const { resolveWithin } = require("rpg-path-safety");
 
@@ -42,6 +44,8 @@ const router = express.Router();
  *             offset: { type: integer }
  *             limit: { type: integer }
  *             sort: { type: string, enum: ["date:desc", "date:asc"], description: "Order by capture date (EXIF, mtime fallback); omit for relevance order" }
+ *             excludeVideos: { type: boolean, description: "Filter out video documents (mime_type in the registry's video MIME types)" }
+ *             smartCutoff: { type: boolean, description: "Hybrid only - trim results relative to the best hit's score (window/min/max are server config) instead of an absolute rankingScoreThreshold" }
  *     responses:
  *       200: { description: Search results }
  *       400: { description: Missing query }
@@ -76,6 +80,15 @@ router.post("/search", async (req, res) => {
   // client-side) keeps the `limit` budget on real pins. All bbox-matched docs
   // have a geo_source, so `!=` doesn't need a missing-field guard.
   if (body.excludeInferred) filters.push('geo_source != "inferred"');
+  // Search-page opt-out of video documents. The MIME list is derived from the
+  // rpg-media-types registry, so a new video format is covered with no change
+  // here. NOT-form on purpose: Meili's NOT is a set complement that also
+  // matches docs MISSING the attribute (verified against v1.47), so images
+  // from before mime_type existed stay visible until the scan-time backfill
+  // stamps them (see pipeline.runFile).
+  if (body.excludeVideos) {
+    filters.push(`NOT mime_type IN [${VIDEO_MIME_TYPES.map((m) => `"${m}"`).join(", ")}]`);
+  }
   if (filters.length) opts.filter = filters;
 
   // Optional relevance cutoff (0..1). Semantic/hybrid ranks every document, so
@@ -130,14 +143,29 @@ router.post("/search", async (req, res) => {
   const manualSort = !!(sortKeys && opts.hybrid);
   if (sortKeys && !manualSort) opts.sort = sortKeys;
 
+  // Relative relevance trim (see lib/smart-cutoff.js). Hybrid-only by
+  // construction: keyword scores are already discriminative, and on the
+  // keyword fallback path (query embedding failed) the flag is simply
+  // ignored rather than erroring the search.
+  const smartCutoff = !!body.smartCutoff && !!opts.hybrid;
+
   try {
-    if (manualSort) {
-      // Pull the whole score-thresholded match set (capped), order it by date
-      // ourselves, then serve just the caller's page from the sorted list. Each
-      // page re-fetches the capped set — cheap, since the smart threshold keeps
-      // it small and bounded by MANUAL_SORT_MAX.
-      const results = await meili.search(query, { ...opts, limit: MANUAL_SORT_MAX, offset: 0 });
-      const sorted = sortHitsByKeys(results.hits, sortKeys);
+    if (manualSort || smartCutoff) {
+      // Pull the whole ranked match set (capped by MANUAL_SORT_MAX), post-
+      // process it ourselves — trim to the relevant head first, THEN date-sort
+      // the survivors (so "Smart + Newest" = relevant matches, newest first) —
+      // and serve just the caller's page. Each page re-fetches the capped set;
+      // cheap, and `total` is exact for the trimmed set.
+      const results = await meili.search(query, {
+        ...opts,
+        limit: MANUAL_SORT_MAX,
+        offset: 0,
+        // The trim reads _rankingScore; harmless extra field for the caller.
+        showRankingScore: smartCutoff || opts.showRankingScore,
+      });
+      let hits = results.hits;
+      if (smartCutoff) hits = applySmartCutoff(hits, config);
+      if (manualSort) hits = sortHitsByKeys(hits, sortKeys);
       const pageOffset = Number(offset);
       const pageLimit = Number(limit);
       return res.status(200).json({
@@ -145,8 +173,8 @@ router.post("/search", async (req, res) => {
         offset: pageOffset,
         limit: pageLimit,
         semanticRatio: opts.hybrid ? semanticRatio : 0,
-        total: sorted.length,
-        results: sorted.slice(pageOffset, pageOffset + pageLimit),
+        total: hits.length,
+        results: hits.slice(pageOffset, pageOffset + pageLimit),
       });
     }
     const results = await meili.search(query, opts);

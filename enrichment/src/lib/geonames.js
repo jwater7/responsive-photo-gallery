@@ -219,4 +219,16 @@ function forward(text) {
   return best;
 }
 
-module.exports = { reverse, forward, loadOnce };
+/**
+ * Format a reverse()/forward() hit as the searchable "city, region, country"
+ * string stored in docs' `place` field (see geo.js setPlace) and embedded into
+ * a video's metadata-text vector (see visual.js).
+ * @param {{city?: string, region?: string|null, country?: string}|null} place
+ * @returns {string} "" when place is null/empty
+ */
+function placeString(place) {
+  if (!place) return "";
+  return [place.city, place.region, place.country].filter(Boolean).join(", ");
+}
+
+module.exports = { reverse, forward, loadOnce, placeString };

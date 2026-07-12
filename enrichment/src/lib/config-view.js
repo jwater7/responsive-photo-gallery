@@ -73,6 +73,13 @@ function workerConfig() {
       ],
     },
     {
+      category: "Video keyframes",
+      items: [
+        entry("Frames per video", "VIDEO_EMBED_FRAMES", c.videoFrameCount, 3),
+        entry("ffmpeg/ffprobe timeout (ms)", "VIDEO_FFMPEG_TIMEOUT_MS", c.videoSubprocessTimeoutMs, 60000),
+      ],
+    },
+    {
       category: "Geo",
       items: [
         entry("Infer location from caption", "GEO_INFER_FROM_CAPTION", c.geoInferFromCaption, true),
@@ -99,6 +106,9 @@ function serviceConfig() {
       category: "Search & services",
       items: [
         entry("Default semantic ratio", "DEFAULT_SEMANTIC_RATIO", c.defaultSemanticRatio, 0.5),
+        entry("Smart cutoff window", "SMART_CUTOFF_WINDOW", c.smartCutoffWindow, 0.02),
+        entry("Smart min results", "SMART_MIN_RESULTS", c.smartMinResults, 24),
+        entry("Smart max results", "SMART_MAX_RESULTS", c.smartMaxResults, 200),
         entry("Offset-paging ceiling", "SEARCH_MAX_TOTAL_HITS", c.searchMaxTotalHits, 100000),
         entry("Meili host", "MEILI_HOST_URL", hostOnly(c.meiliHostUrl), "http://rpg-meilisearch:7700"),
         entry("Redis", "REDIS_URL", hostOnly(c.redisUrl), "redis://rpg-redis:6379"),

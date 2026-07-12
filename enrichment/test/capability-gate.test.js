@@ -72,7 +72,7 @@ const caption = require("../src/enrichers/caption");
 const geo = require("../src/enrichers/geo");
 
 test("visual: undecodable format soft-fails without touching the embedder", async () => {
-  const out = await visual.enrich({ absPath: "/img/scan.heic" });
+  const out = await visual.enrich({ file: { relPath: "img/scan.heic" }, absPath: "/img/scan.heic" });
   assert.match(out.error, /undecodable: no \.heic decoder/);
   assert.ok(!("embedded" in out) && !("_vectors" in out), "nothing durable");
   assert.deepStrictEqual(embedderCalls, [], "no decode attempt");
@@ -80,21 +80,21 @@ test("visual: undecodable format soft-fails without touching the embedder", asyn
 
 test("visual: decodable format proceeds (capability upgrade self-heals)", async () => {
   decodable = new Set([".jpg", ".heic"]); // a HEIF-capable build
-  const out = await visual.enrich({ absPath: "/img/scan.heic" });
+  const out = await visual.enrich({ file: { relPath: "img/scan.heic" }, absPath: "/img/scan.heic" });
   assert.strictEqual(out.embedded, true);
   assert.deepStrictEqual(embedderCalls, ["/img/scan.heic"]);
   decodable = new Set([".jpg"]);
 });
 
 test("ocr: undecodable format soft-fails without touching the engine", async () => {
-  const out = await ocr.enrich({ absPath: "/img/photo.bmp" });
+  const out = await ocr.enrich({ file: { relPath: "img/photo.bmp" }, absPath: "/img/photo.bmp" });
   assert.match(out.error, /undecodable: no \.bmp decoder/);
   assert.strictEqual(out.content, "");
   assert.deepStrictEqual(engineCalls, [], "no decode attempt");
 });
 
 test("ocr: decodable format proceeds", async () => {
-  const out = await ocr.enrich({ absPath: "/img/photo.jpg" });
+  const out = await ocr.enrich({ file: { relPath: "img/photo.jpg" }, absPath: "/img/photo.jpg" });
   assert.strictEqual(out.content, "hello");
   assert.strictEqual(out.error, undefined);
   assert.deepStrictEqual(engineCalls, ["/img/photo.jpg"]);
