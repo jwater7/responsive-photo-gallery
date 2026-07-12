@@ -147,6 +147,18 @@ export const albumManifest = (album) =>
     return { manifest: json.result }
   })
 
+// Drop an album's cached manifest and rebuild it in the background (poll
+// /album-status or the activity feed for progress). apiFetch surfaces the
+// server message (unknown album, excluded album, ...) for the admin UI.
+export const albumRebuild = async (album) => {
+  const json = await apiFetch(
+    API_PREFIX + '/album-rebuild?' + qs({ album }),
+    { method: 'POST' },
+    'could not start the album rebuild'
+  )
+  return json.result
+}
+
 // In-progress album builds for the admin dashboard: { building: [...],
 // activeBuilds, queuedBuilds, concurrency }. A standalone admin poll — never
 // throws; a failed poll just reports an idle default.

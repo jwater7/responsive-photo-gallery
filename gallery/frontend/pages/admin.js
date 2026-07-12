@@ -15,6 +15,7 @@ import { Breadcrumb, Alert } from 'react-bootstrap';
 import { usePing } from '../data/use-ping';
 import { useEnrichStatus } from '../data/use-enrich-status';
 import { useAlbumActivity } from '../data/use-album-activity';
+import { albumRebuild } from '../lib/api';
 import { triggerEnrichmentSync, triggerReap } from '../lib/enrich-api';
 import ScanPanel from '../components/admin/ScanPanel';
 import StatusPanel from '../components/admin/StatusPanel';
@@ -118,7 +119,7 @@ export default function Admin() {
         <ExcludesPanel loggedIn={loggedIn} />
 
         <h4 className="mb-3 mt-4">Album cache</h4>
-        <AlbumBuildsPanel activity={activity} />
+        <AlbumBuildsPanel activity={activity} onRebuild={albumRebuild} loggedIn={loggedIn} />
       </main>
     </div>
   );

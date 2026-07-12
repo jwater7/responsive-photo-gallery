@@ -677,6 +677,45 @@ module.exports = ({ passport, auth }) => {
 
   /**
    * @swagger
+   * /album-rebuild:
+   *   post:
+   *     description: >-
+   *       Drop an album's cached manifest and rebuild it in the background
+   *       (non-blocking; poll /album-status for progress). The cache only
+   *       invalidates itself when the album's FILES change, so a manifest
+   *       built by older code (e.g. one that skipped formats the current
+   *       build supports) needs this on-demand rebuild. Thumbnails and
+   *       sprite sheets are overwritten in place.
+   *     parameters:
+   *       - name: album
+   *         in: query
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       202: { description: Rebuild started (or already ready) }
+   *       400: { description: Missing/invalid album }
+   *       404: { description: Unknown, excluded, or empty album }
+   *     security:
+   *       - ApiKeyAuth: []
+   */
+  router.post('/album-rebuild', required, async (req, res) => {
+    try {
+      const album = req.query.album || (req.body && req.body.album)
+      if (!album) {
+        return res
+          .status(400)
+          .json({ error: { code: 400, message: 'album is required' } })
+      }
+      const result = await albumBuild.rebuildAlbum(album)
+      return res.status(202).json({ result: { state: result.state } })
+    } catch (err) {
+      const code = err.code || 500
+      return res.status(code).json({ error: { code, message: err.message } })
+    }
+  })
+
+  /**
+   * @swagger
    * /album-sprite:
    *   get:
    *     description: A cached sprite sheet (JPEG) by file name from the manifest.

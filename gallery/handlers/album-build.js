@@ -591,6 +591,28 @@ async function ensureAlbum(album) {
   return { state: 'building', status: getStatus(album) }
 }
 
+/**
+ * Admin "rebuild": drop the album's cached manifest and kick off a fresh
+ * background build. Needed because the quickKey fingerprint tracks the
+ * album's FILES, not the build code — a manifest produced by older code
+ * (e.g. pre-registry builds that skipped `.m4v`/`.webm` as unrenderable)
+ * would otherwise be served forever, since the files themselves never
+ * changed. Thumbs/sheets are left in place; the rebuild overwrites them.
+ * @returns the ensureAlbum result ({ state: 'building'|'ready', ... })
+ */
+async function rebuildAlbum(album) {
+  const dir = albumCacheDir(album)
+  if (!dir) {
+    const err = new Error('Invalid album')
+    err.code = 400
+    throw err
+  }
+  await fs.promises.rm(path.join(dir, 'manifest.json'), { force: true })
+  // ensureAlbum re-validates (unknown/excluded/empty album → 400/404), finds
+  // no manifest, and triggers the single-flight background build.
+  return ensureAlbum(album)
+}
+
 // Snapshot of in-progress album builds for the admin UI: which albums are
 // building (actively scanning/rendering, total > 0) or queued (waiting for a
 // build slot, total 0), plus the build-slot usage.
@@ -620,6 +642,7 @@ function getActivity() {
 
 module.exports = {
   ensureAlbum,
+  rebuildAlbum,
   getStatus,
   getActivity,
   readManifest,
