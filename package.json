@@ -20,5 +20,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1"
+  },
+  "overrides-comment": "adm-zip: kludge for CVE-2026-39244 (crafted ZIP -> 4GB alloc). onnxruntime-node still pins adm-zip ^0.5.16 up through its latest (1.27.0), so no upgrade clears it. adm-zip is only used by onnxruntime-node's install-time CUDA-extract script (not runtime), and the 0.6.0 API we rely on (getEntry/extractEntryTo) is unchanged. Remove once onnxruntime-node relaxes the pin.",
+  "overrides": {
+    "adm-zip": "^0.6.0"
   }
 }
