@@ -53,6 +53,11 @@ async function init() {
         // `NOT mime_type IN [<registry video MIMEs>]`). Docs from before this
         // base field existed are backfilled by the scan (see pipeline.runFile).
         "mime_type",
+        // The primary key itself, so a single doc can be fetched by id
+        // (`filter: hash = "<sha256>"`). Meili does not let you filter on the
+        // primary key implicitly. Used by the map's `?img=` deep-link to restore
+        // the open photo across a refresh without knowing its album/viewport.
+        "hash",
         // H3 cell ids per resolution (`cell_r<res>`), faceted for the map's
         // server-side density counts. See lib/geo-cells.js.
         ...geoCells.cellFieldNames(),

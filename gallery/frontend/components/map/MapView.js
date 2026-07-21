@@ -21,6 +21,7 @@ import { imageRef } from '../../lib/image-ref';
 import { docToSlide } from '../../lib/slide';
 import { useFavoritesMulti } from '../../data/use-favorites';
 import MetaLightbox from '../MetaLightbox';
+import ViewInAlbumAction from '../ViewInAlbumAction';
 import CellPhotos, { CELL_POPUP_WIDTH } from './CellPhotos';
 import {
   DEEP_LINK_ZOOM,
@@ -194,9 +195,13 @@ function MapContent({ query, excludeInferred, initial, onOpenLightbox, onTotal }
       if (!slides.length) return;
       let index = slides.findIndex((s) => s.meta.hash === doc.hash);
       if (index < 0) index = 0;
-      onOpenLightbox({ slides, index });
+      // Hand the live viewport up with the slides: MapView writes it into the URL
+      // alongside the photo, so a refresh restores the map WHERE the photo was
+      // opened. Only MapContent has the Leaflet instance to read it from.
+      const c = map.getCenter();
+      onOpenLightbox({ slides, index, view: { lat: c.lat, lng: c.lng, zoom: map.getZoom() } });
     },
-    [onOpenLightbox]
+    [onOpenLightbox, map]
   );
 
   // "View on map" deep-link: anchor the popup at the target coordinate so it opens
@@ -301,6 +306,74 @@ export default function MapView({ initial = null }) {
 
   const hasDeep = initial && Number.isFinite(initial.lat) && Number.isFinite(initial.lng);
 
+  // Reflect the open photo in the URL so it survives a refresh / share / back.
+  // `img` is the photo; `hash` + `lat`/`lng`/`z` put the map back under it (`hash`
+  // also re-anchors the cell popup, so closing the lightbox lands on the pin
+  // rather than an unrelated view). replaceState — browsing slides is not
+  // navigation, and pushing would make Back walk the filmstrip.
+  //
+  // Patch Next's tracked entry (`url`/`as`), not just the address bar, and keep
+  // the existing state (`__N` routing metadata): Next re-renders from `state.as`
+  // on popstate, and wiping the state strands the back button. Same fix the album
+  // and search views already carry (see album.js setDeepLink).
+  const syncImage = useCallback((slide, view) => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const hash = slide?.meta?.hash;
+    if (hash) {
+      url.searchParams.set('img', hash);
+      url.searchParams.set('hash', hash);
+      if (view && Number.isFinite(view.lat) && Number.isFinite(view.lng)) {
+        url.searchParams.set('lat', view.lat);
+        url.searchParams.set('lng', view.lng);
+        url.searchParams.set('z', view.zoom);
+      }
+    } else {
+      // Closing drops only the photo: the viewport params stay, so a refresh
+      // after closing keeps the place the user had navigated to.
+      url.searchParams.delete('img');
+    }
+    const as = url.pathname + url.search;
+    const prev = window.history.state || {};
+    window.history.replaceState({ ...prev, url: as, as }, '', as);
+  }, []);
+
+  const openLightbox = useCallback(
+    (next) => {
+      setLb(next);
+      syncImage(next?.slides?.[next.index], next?.view);
+    },
+    [syncImage]
+  );
+
+  // Restore the lightbox from ?img= on a hard load. Looked up by hash (the index
+  // primary key) rather than reconstructed from the viewport, so it reopens the
+  // exact photo even if the density layer would have piled it into a cell. Fetched
+  // alone, so the filmstrip is just this photo — the surrounding pile isn't known
+  // without re-deriving the cell it came from. Fail-soft: on error the map still
+  // loads at the deep-linked spot, just without the lightbox.
+  useEffect(() => {
+    const wanted = initial?.img;
+    // sha256 hex (see enrichment lib/hash.js) — validated, not escaped, so a
+    // hand-edited URL can't inject into the filter expression.
+    if (!wanted || !/^[a-f0-9]{8,64}$/i.test(wanted)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await geoSearch({ filter: `hash = "${wanted}"`, limit: 1, semanticRatio: 0 });
+        const doc = (r.results || [])[0];
+        if (cancelled || !doc) return;
+        const slide = docToSlide(doc);
+        if (slide) setLb({ slides: [slide], index: 0 });
+      } catch (_) {
+        // no lightbox; the map itself is unaffected
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initial]);
+
   return (
     <div style={{ position: 'relative', height: 'calc(100vh - 120px)', minHeight: 400 }}>
       <form
@@ -379,17 +452,24 @@ export default function MapView({ initial = null }) {
           query={query}
           excludeInferred={!showInferred}
           initial={initial}
-          onOpenLightbox={setLb}
+          onOpenLightbox={openLightbox}
           onTotal={setTotal}
         />
       </MapContainer>
 
       <MetaLightbox
         open={!!lb}
-        close={() => setLb(null)}
+        close={() => {
+          setLb(null);
+          syncImage(null);
+        }}
         index={lb?.index ?? 0}
         slides={lb?.slides ?? []}
         plugins={[Video]}
+        // Paging the filmstrip re-points `img` at whatever is on screen, so the
+        // URL always describes the photo actually being viewed.
+        on={{ view: ({ index }) => syncImage(lb?.slides?.[index], lb?.view) }}
+        actions={(slide) => <ViewInAlbumAction meta={slide.meta} />}
         favorite={{
           isFavorite: (slide) => favorites.isFavorite(slide.meta),
           onToggle: (slide, next) => favorites.toggle(slide.meta, next),

@@ -49,6 +49,7 @@ export default function Album() {
   const [columns, setColumns] = useState(6)
   const [enrichMap, setEnrichMap] = useState({})
   const groupRefs = useRef({})
+  const jumpedTo = useRef(null)
 
   // Mobile-first default column count, set after mount (window not available SSR).
   useEffect(() => {
@@ -98,6 +99,23 @@ export default function Album() {
     const i = ordered.findIndex((e) => e.image === wantImage)
     if (i >= 0) setIndex(i)
   }, [wantImage, ordered])
+
+  // Deep-link: scroll the grid to the month group containing ?at= (arriving from
+  // the map's "View in album"). Distinct from ?image= above, which opens the
+  // lightbox — this one deliberately lands on the LIST, next to the photos taken
+  // around the same time. Waits for the manifest (ordered fills in later, and the
+  // group elements mount in that same commit, so their refs are set by the time
+  // this effect runs). The ref guard keeps it a one-shot: once the user has been
+  // taken there, later renders must not yank the scroll position back.
+  const wantAt = searchParams.get('at')
+  useEffect(() => {
+    if (!ordered.length || !wantAt) return
+    if (jumpedTo.current === wantAt) return
+    const entry = ordered.find((e) => e.image === wantAt)
+    if (!entry) return
+    jumpedTo.current = wantAt
+    groupRefs.current[entry.group]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [wantAt, ordered])
 
   // Reflect the viewed image in the URL (shareable / back-button) without a
   // router navigation (replaceState avoids re-triggering the deep-link effect).
