@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { Breadcrumb, Button, ButtonGroup, Form, ProgressBar } from 'react-bootstrap'
+import { Alert, Breadcrumb, Button, ButtonGroup, Form, ProgressBar } from 'react-bootstrap'
 import { useSearchParams } from 'next/navigation'
 import Video from 'yet-another-react-lightbox/plugins/video'
 import Slideshow from 'yet-another-react-lightbox/plugins/slideshow'
@@ -42,7 +42,7 @@ export default function Album() {
   const searchParams = useSearchParams()
   const album = searchParams.get('album')
 
-  const { manifest, building, status } = useAlbum(album)
+  const { manifest, building, status, error: albumError } = useAlbum(album)
   const { favSet, toggle: toggleFavorite } = useFavorites(album)
 
   const [index, setIndex] = useState(-1)
@@ -59,6 +59,10 @@ export default function Album() {
 
   // Enrichment overlay (AI tags, geo, OCR…) keyed by full path. Fail-soft and
   // only when the enrichment feature is up, so the album works when it is down.
+  // Paged: a single limit-1000 fetch silently dropped metadata (and "View on
+  // map") for an index-order-arbitrary subset of any album with more than 1000
+  // indexed photos. The server's offset ceiling is raised to cover full albums
+  // (SEARCH_MAX_TOTAL_HITS); pages accumulate into one map, applied at the end.
   useEffect(() => {
     if (!album || !features.search) {
       setEnrichMap({})
@@ -66,12 +70,17 @@ export default function Album() {
     }
     let cancelled = false
     ;(async () => {
+      const PAGE = 1000
       try {
         const safe = album.replace(/"/g, '\\"')
-        const r = await geoSearch({ filter: `album = "${safe}"`, limit: 1000 })
-        if (cancelled) return
         const map = {}
-        for (const doc of r.results || []) map[doc.path] = doc
+        for (let offset = 0; ; offset += PAGE) {
+          const r = await geoSearch({ filter: `album = "${safe}"`, limit: PAGE, offset })
+          if (cancelled) return
+          const raw = r.results || []
+          for (const doc of raw) map[doc.path] = doc
+          if (raw.length < PAGE) break
+        }
         setEnrichMap(map)
       } catch (_) {
         if (!cancelled) setEnrichMap({})
@@ -92,16 +101,20 @@ export default function Album() {
 
   // Reflect the viewed image in the URL (shareable / back-button) without a
   // router navigation (replaceState avoids re-triggering the deep-link effect).
-  // Preserve the existing history state (Next stores its routing metadata —
-  // `__N` — there): passing `null` wipes it, and Next's popstate handler then
-  // refuses to navigate back off this entry, so a later cross-route push (e.g.
-  // "View on map") leaves the back button stuck on the other page.
+  // Patch Next's tracked entry (`url`/`as`), not just the address bar: Next
+  // re-renders from `state.as` on popstate, so leaving `as` at the no-image URL
+  // is why Back off the map landed on the album WITHOUT reopening the lightbox
+  // (the search view fixed the same bug in syncImage). Spread the existing state
+  // so Next's routing metadata (`__N`) is preserved — wiping it would strand the
+  // back button on the other page.
   const setDeepLink = useCallback((image) => {
     if (typeof window === 'undefined') return
     const url = new URL(window.location.href)
     if (image) url.searchParams.set('image', image)
     else url.searchParams.delete('image')
-    window.history.replaceState(window.history.state, '', url)
+    const as = url.pathname + url.search
+    const prev = window.history.state || {}
+    window.history.replaceState({ ...prev, url: as, as }, '', as)
   }, [])
 
   const registerGroupRef = (key) => (el) => {
@@ -185,7 +198,16 @@ export default function Album() {
           </div>
         )}
 
-        {!manifest && !building && <>Loading…</>}
+        {/* Polling gave up (backend down / album errored): say so instead of
+            sitting on a fake progress bar or an eternal "Loading…". */}
+        {!manifest && !building && albumError && (
+          <Alert variant="warning">
+            Couldn&apos;t load this album{albumError.message ? ` (${albumError.message})` : ''}. Reload the
+            page to retry.
+          </Alert>
+        )}
+
+        {!manifest && !building && !albumError && <>Loading…</>}
 
         {manifest && (
           <>

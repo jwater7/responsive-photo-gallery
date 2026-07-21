@@ -52,6 +52,12 @@ const createApp = async () => {
     await auth.db.push('/cookieSecret', cookieSecret)
   }
 
+  // Defense-in-depth shared secret for the enrichment API (:8080). Generated
+  // once and persisted in the shared CONFIG_PATH store (NOT an env var); the
+  // enrichment service reads it read-only to verify our proxied requests. Awaited
+  // here (before listen) so getEnrichSecret() is populated for the enrich proxy.
+  await runtimeConfig.ensureEnrichSecret()
+
   const app = express()
 
   // Behind a TLS-terminating reverse proxy (see deployment docs), trust the

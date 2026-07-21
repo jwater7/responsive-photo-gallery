@@ -66,6 +66,27 @@ test('loadExcludes is [] (fail-open) on a missing/garbage file', () => {
   assert.deepStrictEqual(rc.loadExcludes(), [])
 })
 
+test('ensureEnrichSecret generates+persists; getEnrichSecret/loadEnrichSecret agree', async () => {
+  const secret = await rc.ensureEnrichSecret()
+  assert.strictEqual(typeof secret, 'string')
+  assert.ok(secret.length >= 32, 'secret should be a strong random string')
+  // Writer-side sync accessor (the gallery proxy path) returns the cached value.
+  assert.strictEqual(rc.getEnrichSecret(), secret)
+  // Reader-side raw read (the cross-process path the enrichment API uses).
+  assert.strictEqual(rc.loadEnrichSecret(), secret)
+  // On-disk shape is the shared contract: { secret: "..." }.
+  const onDisk = JSON.parse(fs.readFileSync(rc.ENRICH_SECRET_FILE, 'utf8'))
+  assert.strictEqual(onDisk.secret, secret)
+  // Idempotent: a second call reads the persisted value, never re-mints.
+  assert.strictEqual(await rc.ensureEnrichSecret(), secret)
+})
+
+test('loadEnrichSecret is null (fail-open) on a missing/garbage file', () => {
+  assert.strictEqual(rc.readConfigFile(path.join(tmp, 'nope.json'), null), null)
+  fs.writeFileSync(rc.ENRICH_SECRET_FILE, '{ not json')
+  assert.strictEqual(rc.loadEnrichSecret(), null)
+})
+
 test('migrateLegacyAuth copies a legacy config.json once, idempotently', async () => {
   fs.writeFileSync(
     path.join(LEGACY_AUTH, 'config.json'),

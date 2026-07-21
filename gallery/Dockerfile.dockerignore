@@ -11,4 +11,15 @@
 **/.git
 # Never ship a stale host frontend export — the frontend-build stage produces it.
 gallery/frontend/build
+# Next's build/dev cache (~160MB, git-ignored). Regenerated in the frontend-build
+# stage like build/ above, and rewritten on every `next dev` run — leaving it in
+# the context busts the `COPY gallery/frontend/ ./` layer (and the runtime
+# `COPY gallery/ ./gallery/`) constantly, needlessly re-running `npm run build`.
+gallery/frontend/.next
+# Unit tests aren't run during the image build and aren't needed at runtime, but
+# they change often (and are copied by the whole-tree COPYs). Keep them out of
+# the COPY layers so editing a test doesn't invalidate the build. No package
+# ships runtime code from test/ (all use index.js as main), so this is safe.
+**/test
+**/coverage
 debug-data

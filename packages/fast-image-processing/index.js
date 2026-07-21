@@ -22,11 +22,17 @@ const ffmpeg = require('fluent-ffmpeg');
 // 2 and 4 are mirrors of 1 and 3, 5 and 7 are mirrors of 6 and 8
 const needsSwitched = [5, 6, 7, 8];
 
-// TODO need to detect mroe video formats from names
-const isVideo = (f) => (
-  path.extname(f).toLowerCase() == '.mov'
-  || path.extname(f).toLowerCase() == '.mp4'
-)
+// Video-vs-image render dispatch comes from the shared registry, so every
+// registry video format (.mov/.mp4/.m4v/.webm) takes the ffmpeg path.
+// (Previously a local .mov/.mp4-only list: .m4v/.webm were fed to sharp,
+// which failed, and sprite builds silently skipped them.)
+const { isVideo, decodableImageExts } = require('rpg-media-types');
+
+// Image formats THIS sharp build can decode, probed once at load. ffmpeg
+// covers every registry video, but sharp's coverage depends on how its
+// bundled libvips was built (HEIF/AVIF only when compiled in; BMP never), so
+// renderImageCell fails fast with a clear reason instead of a decode attempt.
+const DECODABLE_IMAGE_EXTS = decodableImageExts(sharp.format);
 
 function cacheThumb(src, dest, width, height, cb) {
 
@@ -49,9 +55,11 @@ function cacheImageThumb(src, dest, width, height, cb) {
       return cb(new Error('Source file does not exist'), undefined, undefined);
     }
 
-    // try making the directory if not already there
+    // try making the directory if not already there. Two-arg then(): a
+    // .catch(cb).then(pipeline) chain would run the pipeline AFTER cb(err) —
+    // the pipeline then fails on the missing dir and fires cb a second time
+    // (double HTTP response upstream: ERR_HTTP_HEADERS_SENT).
     mkdirp(path.dirname(dest))
-    .catch(err => cb(err, undefined, undefined))
     .then(() => {
       const sharpImage = sharp(src);
       return sharpImage
@@ -76,7 +84,7 @@ function cacheImageThumb(src, dest, width, height, cb) {
               return cb(undefined, imageBuffer, contentType);
             });
         });
-    });
+    }, err => cb(err, undefined, undefined));
   });
 }
 
@@ -91,9 +99,9 @@ function cacheVideoThumb(src, dest, width, height, cb) {
       return cb(new Error('Source file does not exist'), undefined, undefined);
     }
 
-    // try making the directory if not already there
+    // try making the directory if not already there. Two-arg then(): see
+    // cacheImageThumb — a .catch(cb).then(pipeline) chain double-fires cb.
     mkdirp(path.dirname(dest))
-    .catch(err => cb(err, undefined, undefined))
     .then(() => {
       const ffmpegImage = ffmpeg(src);
       return ffmpegImage
@@ -117,7 +125,7 @@ function cacheVideoThumb(src, dest, width, height, cb) {
           filename: path.basename(dest),
           size: width + 'x' + height,
         });
-    });
+    }, err => cb(err, undefined, undefined));
   });
 }
 
@@ -350,6 +358,12 @@ async function statOrDefault(src) {
 }
 
 async function renderImageCell(src, size) {
+  const ext = path.extname(src).toLowerCase();
+  if (!DECODABLE_IMAGE_EXTS.has(ext)) {
+    // The album build logs this reason and lists the file in the manifest's
+    // `skipped` — visible, and the rest of the build completes.
+    throw new Error(`no ${ext} decoder in this sharp build`);
+  }
   const { isFile, mtime } = await statOrDefault(src);
   if (!isFile) {
     throw new Error('Source file does not exist');
@@ -400,7 +414,13 @@ function screenshotToTemp(src) {
   return new Promise((resolve, reject) => {
     ffmpeg(src)
       .on('end', () => resolve(tmp))
-      .on('error', (err) => reject(err))
+      .on('error', (err) => {
+        // A failed screenshot can leave a partially written frame behind; the
+        // caller's cleanup only runs on success (it never learns `tmp`), so
+        // repeated failures would steadily fill os.tmpdir().
+        fs.promises.unlink(tmp).catch(() => {});
+        reject(err);
+      })
       .screenshots({
         count: 1,
         folder: path.dirname(tmp),

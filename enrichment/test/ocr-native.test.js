@@ -8,7 +8,23 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { parseTsv, buildConvertArgs } = require("../src/enrichers/ocr-engines/native");
+const {
+  parseTsv,
+  buildConvertArgs,
+  buildSharpPipeline,
+  resolveBackend,
+} = require("../src/enrichers/ocr-engines/native");
+
+// Chainable stub recording [method, ...args] for each sharp op, returning itself
+// so a pipeline can be built without decoding a real image.
+function recorder() {
+  const calls = [];
+  const stub = new Proxy(
+    {},
+    { get: (_t, prop) => (...args) => (calls.push([prop, ...args]), stub) },
+  );
+  return { stub, calls };
+}
 
 // Tesseract TSV: level page block par line word left top width height conf text.
 // Level 5 == word. Header row is skipped (parseTsv starts at row 1).
@@ -71,10 +87,59 @@ test("neither: a passthrough copy (no transforms)", () => {
   assert.deepStrictEqual(args, ["in.jpg", "out.png"]);
 });
 
-test("downscale is on by default, preprocess off", () => {
+// buildSharpPipeline: the sharp backend mirrors buildConvertArgs op-for-op and
+// order (grayscale -> bounded downscale -> tonal). The resize maps IM's `WxH>`
+// shrink-only to fit:'inside' + withoutEnlargement.
+const RESIZE_OPTS = { fit: "inside", withoutEnlargement: true };
+
+test("sharp downscale-only resizes within bounds, no quality ops", () => {
+  const { stub, calls } = recorder();
+  buildSharpPipeline(stub, { downscale: true, quality: false, maxDim: 1500 });
+  assert.deepStrictEqual(calls, [["resize", 1500, 1500, RESIZE_OPTS]]);
+});
+
+test("sharp quality-only applies grayscale/normalize/sharpen, no resize", () => {
+  const { stub, calls } = recorder();
+  buildSharpPipeline(stub, { downscale: false, quality: true, maxDim: 1500 });
+  assert.deepStrictEqual(
+    calls.map((c) => c[0]),
+    ["grayscale", "normalize", "sharpen"],
+  );
+});
+
+test("sharp both: grayscale precedes the resize cap, maxDim honored", () => {
+  const { stub, calls } = recorder();
+  buildSharpPipeline(stub, { downscale: true, quality: true, maxDim: 2000 });
+  const ops = calls.map((c) => c[0]);
+  assert.ok(ops.indexOf("grayscale") < ops.indexOf("resize"));
+  assert.deepStrictEqual(calls.find((c) => c[0] === "resize"), [
+    "resize",
+    2000,
+    2000,
+    RESIZE_OPTS,
+  ]);
+});
+
+test("sharp neither: a passthrough (no ops)", () => {
+  const { stub, calls } = recorder();
+  buildSharpPipeline(stub, { downscale: false, quality: false, maxDim: 1500 });
+  assert.deepStrictEqual(calls, []);
+});
+
+// resolveBackend: sharp is the default; ImageMagick only when opted in AND
+// installed (else fall back to sharp so the safety downscale survives).
+test("resolveBackend truth table", () => {
+  assert.strictEqual(resolveBackend(false, false), "sharp");
+  assert.strictEqual(resolveBackend(false, true), "sharp");
+  assert.strictEqual(resolveBackend(true, false), "sharp");
+  assert.strictEqual(resolveBackend(true, true), "magick");
+});
+
+test("downscale is on by default, preprocess off, magick opt-in off", () => {
   delete require.cache[require.resolve("../src/lib/config")];
   const fresh = require("../src/lib/config");
   assert.strictEqual(fresh.ocrDownscale, true);
   assert.strictEqual(fresh.ocrPreprocess, false);
   assert.strictEqual(fresh.ocrDownscaleMaxDim, 1500);
+  assert.strictEqual(fresh.ocrPreprocessUseMagick, false);
 });

@@ -12,9 +12,11 @@ import { useSearchParams } from 'next/navigation';
 import { Breadcrumb, Container, Row, Col, Form, Button } from 'react-bootstrap';
 import { usePing } from '../data/use-ping';
 import { useFavoritesMulti } from '../data/use-favorites';
+import Video from 'yet-another-react-lightbox/plugins/video';
 import { geoSearch } from '../lib/enrich-api';
 import { imageurl } from '../lib/api';
 import { imageRef } from '../lib/image-ref';
+import { docToSlide } from '../lib/slide';
 import MetaLightbox from '../components/MetaLightbox';
 import ViewOnMapAction from '../components/ViewOnMapAction';
 
@@ -26,21 +28,23 @@ const THUMB = '150x150';
 const PAGE_SIZE = 100;
 
 // "Smart" (semantic) search blends the local CLIP embedding with keyword
-// matching and drops weak matches via a relevance threshold, so it filters to
-// what the photos actually depict (even with no matching text/tags). The
-// threshold is tuned for the default CLIP model; raise it to be stricter.
+// matching, so it matches what the photos actually depict (even with no
+// matching text/tags). Weak matches are trimmed SERVER-side via `smartCutoff`
+// (relative to the best hit — window/min/max live in the enrichment config):
+// an absolute score threshold can't work on CLIP-style scores, whose
+// magnitude carries almost no relevance signal (the old 0.62 returned 0-4
+// hits or everything, depending on where the query's flat score band fell).
 const SMART_SEMANTIC_RATIO = 0.6;
-const SMART_SCORE_THRESHOLD = 0.62;
 
 // Result ordering the user can pick. 'relevance' (default) sends no `sort`, so
 // the backend keeps its ranking order; 'date' maps to a newest-first capture-date
 // sort (EXIF, falling back to file mtime — handled server-side).
 const DATE_SORT = 'date:desc';
 
-// Identity of a search run (query + mode + ordering). Used to de-dupe the
-// URL-restore effect against searches we kicked off directly, so a shallow URL
-// update never re-fires the same fetch.
-const idKey = (q, sm, srt) => JSON.stringify([q, !!sm, srt]);
+// Identity of a search run (query + mode + ordering + video filter). Used to
+// de-dupe the URL-restore effect against searches we kicked off directly, so a
+// shallow URL update never re-fires the same fetch.
+const idKey = (q, sm, srt, hv) => JSON.stringify([q, !!sm, srt, !!hv]);
 
 export default function Search() {
   const { loggedIn, isLoading: isPingLoading, features } = usePing({ redirect: '/' });
@@ -48,6 +52,10 @@ export default function Search() {
   const [input, setInput] = useState('');
   const [smart, setSmart] = useState(false);
   const [sort, setSort] = useState('relevance');
+  // Hide videos from results (default off — videos included, the pre-toggle
+  // behavior). Part of the search identity like smart/sort, so it persists
+  // through the URL and re-runs the active query when flipped.
+  const [hideVideos, setHideVideos] = useState(false);
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -58,14 +66,21 @@ export default function Search() {
   const favorites = useFavoritesMulti(results);
   const searchParams = useSearchParams();
 
-  // Mirror the loaded results + the active query so the paging callback (stable,
-  // deps-less) can read the current offset and re-issue the same query for the
-  // next page without going stale.
-  const resultsRef = useRef([]);
-  useEffect(() => {
-    resultsRef.current = results;
-  }, [results]);
-  const activeRef = useRef({ q: '', sm: false, srt: 'relevance' });
+  // The server's paging offset, advanced by the RAW page length — not by how
+  // many hits survived the imageRef filter. Counting the filtered results (the
+  // old `results.length`) drifted the offset whenever a page contained
+  // unreferenceable docs: later pages overlapped (duplicate results/keys), and
+  // a fully-filtered page never advanced at all, so the scroll sentinel
+  // refetched the identical page forever. Same pattern as CellPhotos.
+  const rawOffsetRef = useRef(0);
+  // Mirror the active query so the paging callback (stable, deps-less) can
+  // re-issue the same query for the next page without going stale.
+  const activeRef = useRef({ q: '', sm: false, srt: 'relevance', hv: false });
+  // Monotonic id of the newest fetch. A slow, superseded response (an older
+  // query, or an append raced by a fresh search) must drop its result instead
+  // of clobbering the newer state — without this a slow smart-search could
+  // repaint the grid AFTER a faster newer query already rendered.
+  const fetchSeqRef = useRef(0);
 
   // The search identity (query/smart/sort) is written THROUGH the Next router
   // (shallow replace), not a raw history.replaceState. A bare replaceState
@@ -74,11 +89,12 @@ export default function Search() {
   // restored `/search` WITHOUT the query — the results vanished (Gallery
   // Bugfix #1). Routing the identity keeps it in Next's history entry, so Back
   // lands on the populated search again.
-  const syncQuery = useCallback((q, sm, srt) => {
+  const syncQuery = useCallback((q, sm, srt, hv) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
     if (sm) params.set('smart', '1');
     if (srt === 'date') params.set('sort', 'date');
+    if (hv) params.set('videos', '0');
     const qs = params.toString();
     Router.replace(`/search${qs ? `?${qs}` : ''}`, undefined, { shallow: true });
   }, []);
@@ -101,28 +117,38 @@ export default function Search() {
 
   // A single page fetch. `append` distinguishes a fresh search (replace, from
   // offset 0) from paging in more (append, from the current result count).
-  const doSearch = useCallback(async (q, sm, srt, { append = false } = {}) => {
+  const doSearch = useCallback(async (q, sm, srt, hv, { append = false } = {}) => {
     const query = q.trim();
     if (!query) return;
-    const offset = append ? resultsRef.current.length : 0;
+    const offset = append ? rawOffsetRef.current : 0;
+    const seq = ++fetchSeqRef.current;
     if (!append) {
-      activeRef.current = { q: query, sm, srt };
+      activeRef.current = { q: query, sm, srt, hv };
       setBusy(true);
+      // A fresh search supersedes any in-flight append; that append's finally
+      // is skipped (stale seq), so its spinner must be cleared here.
+      setLoadingMore(false);
     } else {
       setLoadingMore(true);
     }
     try {
       // Keyword mode (semanticRatio 0) filters to images whose text/tags/place
-      // match. Smart mode adds CLIP semantics + a relevance threshold so it
-      // matches what photos depict; both filter rather than just re-rank.
+      // match. Smart mode adds CLIP semantics + the server-side relative trim
+      // so it returns the best matches for what photos depict, bounded rather
+      // than the whole library re-ranked.
       const body = sm
-        ? { query, semanticRatio: SMART_SEMANTIC_RATIO, rankingScoreThreshold: SMART_SCORE_THRESHOLD, limit: PAGE_SIZE, offset }
+        ? { query, semanticRatio: SMART_SEMANTIC_RATIO, smartCutoff: true, limit: PAGE_SIZE, offset }
         : { query, semanticRatio: 0, limit: PAGE_SIZE, offset };
       // Date sort is opt-in; relevance sends no `sort` so the backend keeps its
       // ranking order.
       if (srt === 'date') body.sort = DATE_SORT;
+      // Hide-videos is opt-in; the default sends nothing so the backend's
+      // behavior is byte-identical for existing callers.
+      if (hv) body.excludeVideos = true;
       const r = await geoSearch(body);
+      if (seq !== fetchSeqRef.current) return; // superseded — drop stale page
       const raw = r.results || [];
+      rawOffsetRef.current = offset + raw.length;
       const hits = raw.filter((it) => imageRef(it));
       setResults((prev) => (append ? [...prev, ...hits] : hits));
       setTotal(typeof r.total === 'number' ? r.total : null);
@@ -131,15 +157,18 @@ export default function Search() {
       // page that's all videos/unreferenceable doesn't look like the end.)
       setHasMore(raw.length >= PAGE_SIZE);
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       if (!append) {
         setResults([]);
         setTotal(0);
       }
       setHasMore(false);
     } finally {
-      setSearched(true);
-      if (append) setLoadingMore(false);
-      else setBusy(false);
+      if (seq === fetchSeqRef.current) {
+        setSearched(true);
+        if (append) setLoadingMore(false);
+        else setBusy(false);
+      }
     }
   }, []);
 
@@ -149,9 +178,9 @@ export default function Search() {
     if (!q) return;
     // Mark this identity as already-run so the URL-restore effect (which fires
     // when the shallow replace updates the query params) doesn't fetch it again.
-    autoRanFor.current = idKey(q, smart, sort);
-    syncQuery(q, smart, sort); // new search: drops any stale open-image
-    doSearch(q, smart, sort);
+    autoRanFor.current = idKey(q, smart, sort, hideVideos);
+    syncQuery(q, smart, sort, hideVideos); // new search: drops any stale open-image
+    doSearch(q, smart, sort, hideVideos);
   };
 
   // Switch ordering: re-run the active query under the new sort (paging resets
@@ -161,9 +190,21 @@ export default function Search() {
     setSort(srt);
     const active = activeRef.current;
     if (!active.q) return;
-    autoRanFor.current = idKey(active.q, active.sm, srt);
-    syncQuery(active.q, active.sm, srt);
-    doSearch(active.q, active.sm, srt);
+    autoRanFor.current = idKey(active.q, active.sm, srt, active.hv);
+    syncQuery(active.q, active.sm, srt, active.hv);
+    doSearch(active.q, active.sm, srt, active.hv);
+  };
+
+  // Toggle the video filter: same immediate re-run semantics as changeSort
+  // (the user is looking at results — flipping the filter should update them,
+  // not wait for the next submit).
+  const changeHideVideos = (hv) => {
+    setHideVideos(hv);
+    const active = activeRef.current;
+    if (!active.q) return;
+    autoRanFor.current = idKey(active.q, active.sm, active.srt, hv);
+    syncQuery(active.q, active.sm, active.srt, hv);
+    doSearch(active.q, active.sm, active.srt, hv);
   };
 
   // Infinite scroll: when the sentinel below the grid scrolls into view (with a
@@ -178,7 +219,7 @@ export default function Search() {
       (entries) => {
         if (entries[0].isIntersecting && !busy && !loadingMore) {
           const a = activeRef.current;
-          doSearch(a.q, a.sm, a.srt, { append: true });
+          doSearch(a.q, a.sm, a.srt, a.hv, { append: true });
         }
       },
       { rootMargin: '600px' }
@@ -195,17 +236,19 @@ export default function Search() {
   const urlQ = searchParams.get('q') || '';
   const urlSmart = searchParams.get('smart') === '1';
   const urlSort = searchParams.get('sort') === 'date' ? 'date' : 'relevance';
+  const urlHideVideos = searchParams.get('videos') === '0';
   const autoRanFor = useRef(null);
   useEffect(() => {
     if (!urlQ) return;
-    const key = idKey(urlQ, urlSmart, urlSort);
+    const key = idKey(urlQ, urlSmart, urlSort, urlHideVideos);
     if (autoRanFor.current === key) return;
     autoRanFor.current = key;
     setInput(urlQ);
     setSmart(urlSmart);
     setSort(urlSort);
-    doSearch(urlQ, urlSmart, urlSort);
-  }, [urlQ, urlSmart, urlSort, doSearch]);
+    setHideVideos(urlHideVideos);
+    doSearch(urlQ, urlSmart, urlSort, urlHideVideos);
+  }, [urlQ, urlSmart, urlSort, urlHideVideos, doSearch]);
 
   // Reopen the lightbox at ?image= once its result is present. One-shot (a ref,
   // not an `index` guard): useSearchParams doesn't react to our replaceState, so
@@ -224,10 +267,7 @@ export default function Search() {
   if (isPingLoading) return <></>;
   if (!loggedIn) return <>Redirecting...</>;
 
-  const slides = results.map((r) => ({
-    src: imageurl({ ...imageRef(r) }),
-    meta: r,
-  }));
+  const slides = results.map(docToSlide).filter(Boolean);
 
   return (
     <div>
@@ -268,6 +308,16 @@ export default function Search() {
                     checked={smart}
                     onChange={(e) => setSmart(e.target.checked)}
                     title="Semantic search: match what photos depict, not just text/tags"
+                  />
+                </Col>
+                <Col xs="auto">
+                  <Form.Check
+                    type="switch"
+                    id="hide-videos"
+                    label="Hide videos"
+                    checked={hideVideos}
+                    onChange={(e) => changeHideVideos(e.target.checked)}
+                    title="Filter videos out of the results (photos only)"
                   />
                 </Col>
                 <Col xs="auto">
@@ -345,6 +395,7 @@ export default function Search() {
 
             <MetaLightbox
               slides={slides}
+              plugins={[Video]}
               open={index >= 0}
               index={index}
               close={() => {

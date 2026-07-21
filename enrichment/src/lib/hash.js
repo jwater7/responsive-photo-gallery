@@ -2,18 +2,11 @@
 "use strict";
 
 const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 
-const MIME_BY_EXT = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".tif": "image/tiff",
-  ".tiff": "image/tiff",
-  ".bmp": "image/bmp",
-  ".webp": "image/webp",
-};
+// Extension→MIME comes from the shared registry (the base doc's mime_type
+// drives video-vs-image rendering on the frontend — map slide, lightbox).
+const { mimeFor } = require("rpg-media-types");
 
 /** SHA256 of a file's contents, streamed to avoid loading large files at once. */
 function computeHash(absPath) {
@@ -24,11 +17,6 @@ function computeHash(absPath) {
     stream.on("data", (chunk) => hash.update(chunk));
     stream.on("end", () => resolve(hash.digest("hex")));
   });
-}
-
-function mimeFor(relPath) {
-  return MIME_BY_EXT[path.extname(relPath).toLowerCase()] ||
-    "application/octet-stream";
 }
 
 function fileMtime(absPath) {

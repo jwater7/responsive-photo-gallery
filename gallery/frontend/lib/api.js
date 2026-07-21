@@ -1,304 +1,114 @@
 // vim: tabstop=2 shiftwidth=2 expandtab
 //
+// Gallery API client. Prefix derivation + fetch/error plumbing live in
+// lib/api-base.js (shared with lib/enrich-api.js); helpers here are thin
+// wrappers that keep their public contracts (names, args, return shapes).
 
-// TODO pass in
-let base_prefix = '/';
-if (process.env.PUBLIC_URL) {
-  base_prefix = process.env.PUBLIC_URL;
-  if (base_prefix.substr(-1) !== '/') {
-    base_prefix += '/';
-  }
+import { BASE_PREFIX, API_PREFIX, apiFetch, apiRequest, qs } from './api-base'
+
+// login/logout set + clear the JWT cookie for the whole base path, long-lived
+// so the cookie outlives the browser session (the JWT inside carries its own
+// expiry).
+const cookieOpts = {
+  cookie_path: BASE_PREFIX,
+  cookie_max_age_sec: 60 * 60 * 24 * 365,
 }
-if (process.env.NEXT_PUBLIC_BASENAME) {
-  base_prefix = process.env.NEXT_PUBLIC_BASENAME;
-  if (base_prefix.substr(-1) !== '/') {
-    base_prefix += '/';
-  }
-}
-let api_prefix = base_prefix || '';
-if (process.env.NEXT_PUBLIC_API_PREFIX) {
-  api_prefix = process.env.NEXT_PUBLIC_API_PREFIX;
-  if (process.env.NEXT_PUBLIC_API_PREFIX_OVERRIDE) {
-    api_prefix = process.env.NEXT_PUBLIC_API_PREFIX_OVERRIDE;
-  }
-  if (api_prefix.substr(-1) !== '/') {
-    api_prefix += '/';
-  }
-}
-api_prefix += 'api/v1';
 
 export const login = async (opts) => {
-  try {
-    const res = await fetch(api_prefix + '/login', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      //credentials: 'include',
-      body: JSON.stringify({
-        cookie_path: base_prefix,
-        cookie_max_age_sec: 60 * 60 * 24 * 365,
-        ...opts,
-      }),
-    })
-    const jsonData = await res.json()
-    if (jsonData.error) {
-      console.log(
-        'LOGIN ERROR: (' +
-        jsonData.error.code +
-        ') ' +
-        jsonData.error.message
-      );
-      throw new Error(jsonData.error.message);
-    }
-    return jsonData.result;
-  } catch (err) {
-    // TODO debug log
-    console.log('FETCH ERROR: ' + err.message);
-    // TODO custom error
-    throw new Error(err.message, { cause: err })
-  }
+  const json = await apiFetch(
+    API_PREFIX + '/login',
+    { method: 'POST', body: { ...cookieOpts, ...opts } },
+    'login failed'
+  )
+  return json.result
 }
 
 // Auth heartbeat + enrichment feature flags in one request. Returns
 // { loggedIn, features, degraded }. Feature flags ride along so the client
 // bootstraps in a single call (see data/use-ping.js).
-export const ping = async (opts) => {
+export const ping = async () => {
   // Only a *definitive* auth rejection (the JWT gate's 401/403) counts as
   // "logged out". Every other failure — network blip, 5xx, proxy hiccup during a
   // cold boot — is *unknown*, not a logout, so we throw and let SWR keep the last
   // known state and retry. Conflating the two used to bounce a still-logged-in
   // user to the home page on a hard reload (TODO Bugfix #1).
-  let res
-  try {
-    res = await fetch(api_prefix + '/ping')
-  } catch (err) {
-    console.log('FETCH ERROR: ' + err.message)
-    throw err
-  }
-  if (res.status === 401 || res.status === 403) {
+  const { status, ok, json } = await apiRequest(API_PREFIX + '/ping')
+  if (status === 401 || status === 403) {
     return { loggedIn: false }
   }
-  if (!res.ok) {
-    throw new Error('ping failed: ' + res.status)
+  if (!ok) {
+    throw new Error('ping failed: ' + status)
   }
-  const jsonData = await res.json().catch(() => null)
-  if (!jsonData || jsonData.error) {
+  if (!json || json.error) {
     throw new Error('ping returned a malformed response')
   }
   return {
     loggedIn: true,
-    features: jsonData.features,
-    degraded: jsonData.degraded,
+    features: json.features,
+    degraded: json.degraded,
   }
 }
 
 export const logout = async (opts) => {
-  try {
-    const res = await fetch(api_prefix + '/logout', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        cookie_path: base_prefix,
-        cookie_max_age_sec: 60 * 60 * 24 * 365,
-        ...opts,
-      }),
-    })
-    if (!res?.ok) {
-      throw new Error(res.statusText)
-    }
-    const jsonData = await res.json()
-
-    if (jsonData.error) {
-      console.log(
-        'LOGOUT ERROR: (' +
-        jsonData.error.code +
-        ') ' +
-        jsonData.error.message
-      );
-      throw new Error(jsonData.error.message);
-    }
-    return !!jsonData;
-  } catch (err) {
-    console.log('FETCH ERROR: ' + err.message);
-    // TODO custom error
-    throw new Error(err.message, { cause: err })
-  }
+  const json = await apiFetch(
+    API_PREFIX + '/logout',
+    { method: 'POST', body: { ...cookieOpts, ...opts } },
+    'logout failed'
+  )
+  return !!json
 }
 
 export const albums = async () => {
-  // TODO fetch(api_prefix + '/albums?token=' + opts.token)
-  try {
-    const res = await fetch(api_prefix + '/albums')
-    if (!res?.ok) {
-      throw new Error(res.statusText)
-    }
-    const jsonData = await res.json()
-    if (jsonData.error) {
-      console.log(
-        'ALBUMS ERROR: (' +
-        jsonData.error.code +
-        ') ' +
-        jsonData.error.message
-      );
-      throw new Error(jsonData.error.message);
-    }
-    return jsonData?.result
-  } catch (err) {
-    console.log('FETCH ERROR: ' + err.message);
-    // TODO custom error
-    throw new Error(err.message, { cause: err })
-  }
+  const json = await apiFetch(API_PREFIX + '/albums', {}, 'albums failed')
+  return json.result
 }
 
-export const list = async (opts) => {
-  //fetch(api_prefix + '/list', {
-  //  headers: {
-  //    'X-API-Key': opts.token,
-  //  },
-  //})
-  const max_list_items = opts.max_list_items ? opts.max_list_items : '';
-  // TODO fetch(api_prefix + '/list?token=' + opts.token + '&album=' + opts.album + '&num_results=' + max_list_items + '&distributed=true')
-  try {
-    const res = await fetch(
-      api_prefix +
-      '/list?album=' +
-      encodeURIComponent(opts.album) +
-      '&num_results=' +
-      max_list_items +
-      '&distributed=true&withMetadata=' +
-      JSON.stringify({ tags: ['favorite'] })
-    )
-    if (!res?.ok) {
-      throw new Error(res.statusText)
-    }
-    const jsonData = await res.json()
-    if (jsonData.error) {
-      console.log(
-        'LIST ERROR: (' +
-        jsonData.error.code +
-        ') ' +
-        jsonData.error.message
-      );
-      throw new Error(jsonData.error.message);
-    }
-    return jsonData?.result
-  } catch (err) {
-    console.log('FETCH ERROR: ' + err.message);
-    // TODO custom error
-    throw new Error(err.message, { cause: err })
-  }
-}
-
-export const thumbnails = async opts => {
-  const max_list_items = opts.max_list_items ? opts.max_list_items : '';
-  // TODO fetch(api_prefix + '/thumbnails?token=' + opts.token + '&album=' + opts.album + '&thumb=' + opts.thumb + '&num_results=' + max_list_items + '&distributed=true')
-  try {
-    const res = await fetch(
-      api_prefix +
-      '/thumbnails?album=' +
-      encodeURIComponent(opts.album) +
-      '&thumb=' +
-      opts.thumb +
-      '&num_results=' +
-      max_list_items +
-      '&distributed=true'
-    )
-    if (!res?.ok) {
-      throw new Error(res.statusText)
-    }
-    const jsonData = await res.json()
-    if (jsonData.error) {
-      console.log(
-        'THUMBNAILS ERROR: (' +
-        jsonData.error.code +
-        ') ' +
-        jsonData.error.message
-      );
-      throw new Error(jsonData.error.message);
-    }
-    return jsonData?.result
-  } catch (err) {
-    console.log('FETCH ERROR: ' + err.message);
-    // TODO custom error
-    throw new Error(err.message, { cause: err })
-  }
-}
-
+// Replace an image's tag set. Returns null (never throws) on any failure —
+// the useFavorites hooks key their optimistic-update REVERT off that null.
 export const tag = async (opts) => {
   try {
-    const res = await fetch(api_prefix + '/image-data', {
-      method: 'PATCH',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      //credentials: 'include',
-      body: JSON.stringify({
-        ...opts,
-      }),
-    });
-    const jsonData = await res.json();
-    if (jsonData.error) {
-      console.log(
-        'UPDATE PAGE ERROR: (' +
-        jsonData.error.code +
-        ') ' +
-        jsonData.error.message
-      );
-      return null;
-    }
-    return jsonData.result;
+    const json = await apiFetch(
+      API_PREFIX + '/image-data',
+      { method: 'PATCH', body: { ...opts } },
+      'image-data update failed'
+    )
+    return json.result
   } catch (err) {
-    console.log('FETCH ERROR: ' + err.message);
+    return null
   }
 }
 
 export const imageurl = (opts) => {
   if (!opts.album || !opts.image) {
-    return false;
+    return false
   }
-  // TODO let iurl = api_prefix + '/image?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
   let iurl =
-    api_prefix + '/image?album=' + encodeURIComponent(opts.album) + '&image=' + encodeURIComponent(opts.image);
+    API_PREFIX + '/image?' + qs({ album: opts.album, image: opts.image })
   if (opts.thumb) {
-    iurl += '&thumb=' + encodeURIComponent(opts.thumb);
+    iurl += '&thumb=' + encodeURIComponent(opts.thumb)
   }
-  return iurl;
+  return iurl
 }
 
 export const videourl = (opts) => {
   if (!opts.album || !opts.image) {
-    return false;
+    return false
   }
-  //TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
-  // TODO let iurl = api_prefix + '/video?token=' + opts.token + '&album=' + opts.album + '&image=' + opts.image;
   let iurl =
-    api_prefix + '/video?album=' + encodeURIComponent(opts.album) + '&image=' + encodeURIComponent(opts.image);
+    API_PREFIX + '/video?' + qs({ album: opts.album, image: opts.image })
   if (opts.thumb) {
-    iurl += '&thumb=' + encodeURIComponent(opts.thumb);
+    iurl += '&thumb=' + encodeURIComponent(opts.thumb)
   }
-  return iurl;
-}
-
-export const appendThumbnail = (url, opts) => {
-  if (!opts.size) {
-    return false;
-  }
-  return url + '&thumb=' + opts.size;
+  return iurl
 }
 
 // --- Album build cache (sprite sheets / collage cover / manifest) -----------
 
-// Cap how many album-manifest / album-status requests are in flight at once.
-// The home page mounts one element per album and each fetches its manifest, so a
-// cold library would otherwise ask the API to start hundreds of full-album
-// builds simultaneously. A small global queue smooths that into a steady
-// trickle (cold builds happen a few at a time; warm loads are fast anyway).
+// Cap how many album-manifest requests are in flight at once. The home page
+// mounts one element per album and each fetches its manifest, so a cold
+// library would otherwise ask the API to start hundreds of full-album builds
+// simultaneously. A small global queue smooths that into a steady trickle
+// (cold builds happen a few at a time; warm loads are fast anyway).
 const ALBUM_FETCH_CONCURRENCY = 4
 let albumActive = 0
 const albumQueue = []
@@ -322,37 +132,40 @@ const limitAlbum = (fn) =>
 // { building: true, ...status } when the album is cold/stale (202).
 export const albumManifest = (album) =>
   limitAlbum(async () => {
-    const res = await fetch(
-      api_prefix + '/album-manifest?album=' + encodeURIComponent(album)
+    const { status, ok, json } = await apiRequest(
+      API_PREFIX + '/album-manifest?' + qs({ album })
     )
-    const jsonData = await res.json().catch(() => ({}))
-    if (res.status === 202) {
-      return { building: true, ...(jsonData.result || {}) }
+    if (status === 202) {
+      return { building: true, ...((json && json.result) || {}) }
     }
-    if (!res.ok || jsonData.error) {
-      throw new Error(jsonData?.error?.message || res.statusText)
+    if (!ok || !json || json.error) {
+      throw new Error(
+        (json && json.error && json.error.message) ||
+          'album-manifest failed (HTTP ' + status + ')'
+      )
     }
-    return { manifest: jsonData.result }
+    return { manifest: json.result }
   })
 
-// Build progress: { state, done, total, sheetsReady }.
-export const albumStatus = (album) =>
-  limitAlbum(async () => {
-    const res = await fetch(
-      api_prefix + '/album-status?album=' + encodeURIComponent(album)
-    )
-    const jsonData = await res.json().catch(() => ({}))
-    return jsonData.result || { state: 'unknown' }
-  })
+// Drop an album's cached manifest and rebuild it in the background (poll
+// /album-status or the activity feed for progress). apiFetch surfaces the
+// server message (unknown album, excluded album, ...) for the admin UI.
+export const albumRebuild = async (album) => {
+  const json = await apiFetch(
+    API_PREFIX + '/album-rebuild?' + qs({ album }),
+    { method: 'POST' },
+    'could not start the album rebuild'
+  )
+  return json.result
+}
 
 // In-progress album builds for the admin dashboard: { building: [...],
-// activeBuilds, queuedBuilds, concurrency }. A standalone admin poll — not
-// gated by the per-album build pipeline above.
+// activeBuilds, queuedBuilds, concurrency }. A standalone admin poll — never
+// throws; a failed poll just reports an idle default.
 export const albumActivity = async () => {
-  const res = await fetch(api_prefix + '/album-activity')
-  const jsonData = await res.json().catch(() => ({}))
+  const { json } = await apiRequest(API_PREFIX + '/album-activity')
   return (
-    jsonData.result || {
+    (json && json.result) || {
       building: [],
       activeBuilds: 0,
       queuedBuilds: 0,
@@ -361,42 +174,26 @@ export const albumActivity = async () => {
   )
 }
 
-// Image names carrying a tag (default "favorite") in an album.
+// Image names carrying a tag (default "favorite") in an album. Never throws;
+// no tags directory just means no favorites.
 export const albumTags = async (album, tag = 'favorite') => {
-  const res = await fetch(
-    api_prefix +
-      '/album-tags?album=' +
-      encodeURIComponent(album) +
-      '&tag=' +
-      encodeURIComponent(tag)
-  )
-  const jsonData = await res.json().catch(() => ({}))
-  return jsonData.result || []
+  const { json } = await apiRequest(API_PREFIX + '/album-tags?' + qs({ album, tag }))
+  return (json && json.result) || []
 }
 
 // `v` is an optional cache-buster (e.g. the manifest albumHash) so long-cached
 // artifacts refresh when an album rebuilds.
 export const albumCoverUrl = (album, v) =>
-  api_prefix +
-  '/album-cover?album=' +
-  encodeURIComponent(album) +
-  (v ? '&v=' + encodeURIComponent(v) : '')
+  API_PREFIX + '/album-cover?' + qs({ album, ...(v ? { v } : {}) })
 
 export const albumSpriteUrl = (album, sheet, v) =>
-  api_prefix +
-  '/album-sprite?album=' +
-  encodeURIComponent(album) +
-  '&sheet=' +
-  encodeURIComponent(sheet) +
-  (v ? '&v=' + encodeURIComponent(v) : '')
+  API_PREFIX + '/album-sprite?' + qs({ album, sheet, ...(v ? { v } : {}) })
 
 // Admin: the directory exclude list (POSIX paths relative to IMAGE_PATH). A
-// top-level entry hides a whole album; a nested entry hides a subtree from the
-// build + enrichment walks. Core /api/v1 route (not the enrich proxy).
+// top-level entry hides a whole album; a nested entry hides a subtree from
+// every media walk. Core /api/v1 route (not the enrich proxy).
 export const getExcludes = async () => {
-  const res = await fetch(api_prefix + '/excludes')
-  if (!res.ok) throw new Error('excludes fetch failed')
-  const json = await res.json()
+  const json = await apiFetch(API_PREFIX + '/excludes', {}, 'excludes fetch failed')
   return json.excludes || []
 }
 
@@ -404,66 +201,46 @@ export const getExcludes = async () => {
 // build cache, and fires a background enrichment reap; returns the normalized
 // list. Non-blocking server-side.
 export const setExcludes = async (excludes) => {
-  const res = await fetch(api_prefix + '/excludes', {
-    method: 'PUT',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ excludes }),
-  })
-  if (!res.ok) throw new Error('excludes update failed')
-  const json = await res.json()
+  const json = await apiFetch(
+    API_PREFIX + '/excludes',
+    { method: 'PUT', body: { excludes } },
+    'excludes update failed'
+  )
   return json.excludes || []
 }
 
 // --- User management (admin) ------------------------------------------------
-// All behind the same /api/v1 auth gate. Errors surface the server message so
-// the admin UI can show "user exists", "no such user", etc.
-
-const userError = async (res, fallback) => {
-  const json = await res.json().catch(() => ({}))
-  throw new Error(json?.error?.message || fallback)
-}
+// All behind the same /api/v1 auth gate. apiFetch surfaces the server message
+// so the admin UI can show "user exists", "no such user", etc.
 
 export const listUsers = async () => {
-  const res = await fetch(api_prefix + '/users')
-  if (!res.ok) await userError(res, 'could not load users')
-  const json = await res.json()
+  const json = await apiFetch(API_PREFIX + '/users', {}, 'could not load users')
   return json.result || []
 }
 
 export const createUser = async (username, password) => {
-  const res = await fetch(api_prefix + '/users', {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  })
-  if (!res.ok) await userError(res, 'could not create user')
-  return (await res.json()).result
+  const json = await apiFetch(
+    API_PREFIX + '/users',
+    { method: 'POST', body: { username, password } },
+    'could not create user'
+  )
+  return json.result
 }
 
 export const setUserPassword = async (username, password) => {
-  const res = await fetch(
-    api_prefix + '/users/' + encodeURIComponent(username) + '/password',
-    {
-      method: 'PUT',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ password }),
-    }
+  const json = await apiFetch(
+    API_PREFIX + '/users/' + encodeURIComponent(username) + '/password',
+    { method: 'PUT', body: { password } },
+    'could not set password'
   )
-  if (!res.ok) await userError(res, 'could not set password')
-  return (await res.json()).result
+  return json.result
 }
 
 export const deleteUser = async (username) => {
-  const res = await fetch(
-    api_prefix + '/users/' + encodeURIComponent(username),
-    { method: 'DELETE' }
+  const json = await apiFetch(
+    API_PREFIX + '/users/' + encodeURIComponent(username),
+    { method: 'DELETE' },
+    'could not delete user'
   )
-  if (!res.ok) await userError(res, 'could not delete user')
-  return (await res.json()).result
+  return json.result
 }

@@ -53,6 +53,7 @@ function workerConfig() {
         entry("Min confidence (0-100)", "OCR_MIN_CONFIDENCE", c.ocrMinConfidence, 50),
         entry("Page segmentation (PSM)", "OCR_PSM", c.ocrPsm || "(Tesseract default 3)", "(Tesseract default 3)"),
         entry("Preprocess", "OCR_PREPROCESS", c.ocrPreprocess, false),
+        entry("Preprocess via ImageMagick", "OCR_PREPROCESS_USE_MAGICK", c.ocrPreprocessUseMagick, false),
         entry("Downscale input", "OCR_DOWNSCALE", c.ocrDownscale, true),
         entry("Downscale max (px)", "OCR_DOWNSCALE_MAX", c.ocrDownscaleMaxDim, 1500),
         entry("OCR timeout (ms)", "OCR_TIMEOUT_MS", c.ocrTimeoutMs, 120000),
@@ -69,6 +70,19 @@ function workerConfig() {
         entry("Tag scale", "TAG_SCALE", c.tagScale, 50),
         entry("Tag threshold", "TAG_THRESHOLD", c.tagThreshold, 0.05),
         entry("Max tags", "MAX_TAGS", c.maxTags, 6),
+      ],
+    },
+    {
+      category: "Video keyframes",
+      items: [
+        entry("Frames per video", "VIDEO_EMBED_FRAMES", c.videoFrameCount, 3),
+        entry("ffmpeg/ffprobe timeout (ms)", "VIDEO_FFMPEG_TIMEOUT_MS", c.videoSubprocessTimeoutMs, 60000),
+      ],
+    },
+    {
+      category: "Geo",
+      items: [
+        entry("Infer location from caption", "GEO_INFER_FROM_CAPTION", c.geoInferFromCaption, true),
       ],
     },
     {
@@ -92,6 +106,10 @@ function serviceConfig() {
       category: "Search & services",
       items: [
         entry("Default semantic ratio", "DEFAULT_SEMANTIC_RATIO", c.defaultSemanticRatio, 0.5),
+        entry("Smart cutoff window", "SMART_CUTOFF_WINDOW", c.smartCutoffWindow, 0.02),
+        entry("Smart min results", "SMART_MIN_RESULTS", c.smartMinResults, 24),
+        entry("Smart max results", "SMART_MAX_RESULTS", c.smartMaxResults, 200),
+        entry("Offset-paging ceiling", "SEARCH_MAX_TOTAL_HITS", c.searchMaxTotalHits, 100000),
         entry("Meili host", "MEILI_HOST_URL", hostOnly(c.meiliHostUrl), "http://rpg-meilisearch:7700"),
         entry("Redis", "REDIS_URL", hostOnly(c.redisUrl), "redis://rpg-redis:6379"),
         entry("API port", "ENRICHMENT_PORT", c.port, 8080),

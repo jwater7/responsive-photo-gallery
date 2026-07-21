@@ -71,7 +71,10 @@ export const useAlbum = (album) => {
           } catch (err) {
             if (cancelled) break
             if (++errors >= MAX_ERRORS) {
+              // Give up visibly: `building` must not stay true or consumers
+              // render a fake "Building album…" progress state forever.
               setError(err)
+              setBuilding(false)
               break
             }
             await wait(withJitter(POLL_MS))

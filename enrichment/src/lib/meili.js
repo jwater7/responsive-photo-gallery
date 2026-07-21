@@ -9,6 +9,7 @@
 
 const { Meilisearch } = require("meilisearch");
 const config = require("./config");
+const geoCells = require("./geo-cells");
 
 const debug = require("debug")("responsive-photo-gallery:meili");
 const debugErr = require("debug")("responsive-photo-gallery:meili:error");
@@ -41,13 +42,31 @@ async function init() {
     await c.index(INDEX_NAME).updateSettings({
       filterableAttributes: [
         "_geo", "album", "tags", "place_city", "place_country", "taken_at",
+        // Source of a doc's location, so the map can exclude the lower-confidence
+        // caption-inferred pins server-side (the `limit` then applies to the
+        // non-inferred set, not a viewport's first 500 mixed pins).
+        "geo_source",
         // Per-stage failure markers, so the "broken enrichments" list is
         // queryable, e.g. filter `ocr_error IS NOT NULL`. See TODO Enrichment #9.
         "ocr_error", "visual_error", "geo_error", "caption_error",
+        // Media kind, so search can exclude videos (`excludeVideos` →
+        // `NOT mime_type IN [<registry video MIMEs>]`). Docs from before this
+        // base field existed are backfilled by the scan (see pipeline.runFile).
+        "mime_type",
+        // H3 cell ids per resolution (`cell_r<res>`), faceted for the map's
+        // server-side density counts. See lib/geo-cells.js.
+        ...geoCells.cellFieldNames(),
       ],
       // taken_at = EXIF capture date; last_modified = file mtime, the fallback
       // sort key for photos with no EXIF date (see the /search `sort` handler).
       sortableAttributes: ["taken_at", "last_modified"],
+      // Raise the per-facet value cap (default 100) so a viewport's density query
+      // returns every populated cell, not a truncated subset.
+      faceting: { maxValuesPerFacet: config.geoFacetMaxValues },
+      // Raise the offset-paging ceiling (default 1000): the album overlay, the
+      // dense-cell popup, and search infinite scroll all page by offset and
+      // silently hit a wall at this value. See config.searchMaxTotalHits.
+      pagination: { maxTotalHits: config.searchMaxTotalHits },
     });
   } catch (err) {
     debugErr("update filterable/sortable failed: %s", err.message);
@@ -98,7 +117,13 @@ function index() {
 /** Fetch one document by hash, or null if it doesn't exist. */
 async function getDoc(hash) {
   try {
-    return await index().getDocument(hash);
+    // retrieveVectors so the pipeline can tell whether a userProvided embedding
+    // actually EXISTS, not just whether the `embedded` marker is set. Meili can
+    // purge userProvided vectors on an embedder change while leaving that scalar
+    // marker behind; without seeing the real vector, a stale marker skips the
+    // visual stage forever (the drift that froze the library). The vector payload
+    // is small next to the per-file content hash this call precedes.
+    return await index().getDocument(hash, { retrieveVectors: true });
   } catch (err) {
     // meilisearch-js v0.50+ moved the API error fields: the Meili error code is
     // now on err.cause.code and the HTTP status on err.response.status (the old
@@ -186,8 +211,50 @@ async function indexStats() {
   return index().getStats();
 }
 
+/**
+ * Index-wide count of FAILED Meili tasks, for admin diagnostics. A nonzero count
+ * means document writes are being silently rejected downstream of our pipeline —
+ * `updateFields` awaits only the task ENQUEUE, so a task that later fails (e.g. the
+ * userProvided-embedder "vectors required" rejection that froze docs at old
+ * versions) is invisible to `runFile`. Surfacing it makes that class of silent
+ * data loss detectable. Best-effort: returns null if the tasks endpoint can't be
+ * read (never throws into /index-stats).
+ */
+async function failedTaskCount() {
+  try {
+    const base = config.meiliHostUrl.replace(/\/$/, "");
+    const r = await fetch(`${base}/tasks?statuses=failed&limit=1`, {
+      headers: config.meiliApiKey ? { Authorization: `Bearer ${config.meiliApiKey}` } : {},
+    });
+    const d = await r.json();
+    return typeof d.total === "number" ? d.total : null;
+  } catch (err) {
+    debugErr("failedTaskCount failed: %s", err.message);
+    return null;
+  }
+}
+
+/**
+ * Delete the retained FAILED tasks (Meili keeps finished tasks until deleted or
+ * aged out), so the failedTaskCount health signal can be reset AFTER the cause of
+ * the failures is fixed. Meili only permits deleting finished tasks; we scope to
+ * `statuses=failed`. Deletion is itself asynchronous — Meili enqueues a
+ * `taskDeletion` task — so this returns that task descriptor rather than a final
+ * count. Throws on a transport/HTTP error so the route can report it.
+ */
+async function clearFailedTasks() {
+  const base = config.meiliHostUrl.replace(/\/$/, "");
+  const r = await fetch(`${base}/tasks?statuses=failed`, {
+    method: "DELETE",
+    headers: config.meiliApiKey ? { Authorization: `Bearer ${config.meiliApiKey}` } : {},
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d && d.message ? d.message : `task deletion failed (HTTP ${r.status})`);
+  return d; // { taskUid, status: "enqueued", ... }
+}
+
 function isConnected() {
   return !!client;
 }
 
-module.exports = { init, index, getDoc, updateFields, allDocs, allDocStats, allDocRefs, deleteDocs, search, indexStats, isConnected, INDEX_NAME };
+module.exports = { init, index, getDoc, updateFields, allDocs, allDocStats, allDocRefs, deleteDocs, search, indexStats, failedTaskCount, clearFailedTasks, isConnected, INDEX_NAME };

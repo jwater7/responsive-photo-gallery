@@ -49,10 +49,13 @@ function normalize(data) {
   return Array.from(data, (v) => v / norm);
 }
 
-/** Embed an image file into a normalized vector. */
-async function embedImage(absPath) {
+/** Embed an image into a normalized vector. Accepts a file path or an
+ *  in-memory encoded image Buffer (e.g. a piped video keyframe PNG —
+ *  RawImage.read takes a Blob, never touching disk). */
+async function embedImage(input) {
   const { processor, vision } = await load();
-  const image = await tf.RawImage.read(absPath);
+  const source = Buffer.isBuffer(input) ? new Blob([input]) : input;
+  const image = await tf.RawImage.read(source);
   const inputs = await processor(image);
   const { image_embeds } = await vision(inputs);
   return normalize(image_embeds.data);

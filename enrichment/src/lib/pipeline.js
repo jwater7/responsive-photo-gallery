@@ -10,6 +10,7 @@
  */
 
 const meili = require("./meili");
+const config = require("./config");
 const { computeHash, mimeFor, fileMtime, fileSize } = require("./hash");
 const enrichers = require("../enrichers");
 
@@ -25,6 +26,20 @@ debugErr.enabled = true;
 function hasAllFields(doc, fields) {
   if (!doc) return false;
   return fields.every((f) => doc[f] !== undefined && doc[f] !== null);
+}
+
+/**
+ * Does the doc carry an ACTUAL stored vector for `embedderName`? Meili returns
+ * userProvided vectors under `_vectors` only when fetched with retrieveVectors
+ * (see meili.getDoc), shaped `{ embeddings, regenerate }` (or a bare array on
+ * older versions). Distinguishes a real embedding from a leftover `embedded`
+ * marker whose vector Meili purged on an embedder-config change.
+ */
+function hasEmbedding(doc, embedderName) {
+  const v = doc && doc._vectors && doc._vectors[embedderName];
+  if (!v) return false;
+  const emb = Array.isArray(v) ? v : v.embeddings;
+  return Array.isArray(emb) && emb.length > 0;
 }
 
 /** Per-enricher version stamp field on a doc, e.g. `ocr_version`. */
@@ -57,13 +72,60 @@ function isCurrent(doc, enricher) {
 }
 
 /**
+ * Should this enricher be force-reprocessed regardless of `isCurrent`? `force` is
+ * `true` (all enrichers), a list of enricher names (just those), or falsy (none).
+ * Used by an admin "Force" scan to re-run a stage even on an up-to-date doc —
+ * e.g. to re-OCR a library after a preprocess change without bumping a version.
+ */
+function isForced(force, enricher) {
+  return force === true || (Array.isArray(force) && force.includes(enricher.name));
+}
+
+/**
+ * True when an embedding-producing stage (`enricher.embeds`) has lost its stored
+ * vector. Meili can purge userProvided vectors on an embedder-config change while
+ * leaving the stage's `embedded` marker behind, so `isCurrent` would wrongly
+ * report the stage as done and never re-run it — freezing the doc (its later
+ * partial writes then get rejected for the missing vector). Checking the REAL
+ * vector makes a dropped embedding self-heal on the next scan. Only existing docs
+ * need this; a new doc has no existing record, so `isCurrent` already re-runs it.
+ */
+function embeddingLost(enricher, existing, embedderName) {
+  return !!(enricher.embeds && existing && !hasEmbedding(existing, embedderName));
+}
+
+/**
+ * True when a doc's partial update must carry an `_vectors:{image:null}` opt-out.
+ *
+ * Meili's `userProvided` `image` embedder re-validates embeddings on EVERY
+ * `documentAdditionOrUpdate` — even a partial one that touches unrelated fields.
+ * If the target doc has no stored vector and the write supplies none, Meili fails
+ * the ENTIRE task (`vector_embedding_error`) and applies none of it. Since only
+ * the `visual` stage supplies a vector, any geo/ocr/caption write to a not-yet-
+ * embedded doc (new, video, or visual-not-yet-run) would be silently discarded —
+ * which is exactly what froze ~60k docs (missing map cells; see the failed-task
+ * incident). Opting out with a null vector lets the partial update land; `visual`
+ * later overwrites the null with the real vector.
+ *
+ * Only opt out when this write doesn't already carry a vector AND the doc isn't
+ * already embedded — the `embedded` marker tracks vector presence (visual writes
+ * both together). Emitting null when a vector exists/was just written would WIPE
+ * it, so those cases must be excluded.
+ */
+function needsEmbedOptOut(update, existing) {
+  return update._vectors === undefined && !(existing && existing.embedded);
+}
+
+/**
  * Enrich one file: hash it, look up the existing doc, run each applicable
  * enricher whose output is missing, and write a single merged partial update.
  *
  * @param {{album: string, relPath: string, absPath: string}} file
+ * @param {{force?: boolean|string[]}} [opts] force-reprocess all enrichers
+ *        (`true`) or named ones (a list), bypassing the `isCurrent` skip.
  * @returns {Promise<{hash: string, ran: string[], skipped: string[], failed: string[]}>}
  */
-async function runFile(file) {
+async function runFile(file, { force = false } = {}) {
   await meili.init();
 
   const hash = await computeHash(file.absPath);
@@ -96,6 +158,12 @@ async function runFile(file) {
       const mtime = fileMtime(file.absPath);
       if (existing.file_size !== size) update.file_size = size;
       if (existing.last_modified !== mtime) update.last_modified = mtime;
+      // Backfill: mime_type joined the base fields after older docs were
+      // created, and the search API's excludeVideos filter needs it (its
+      // NOT-form tolerates the gap, but only until someone writes a positive
+      // filter). Stamped here so one scan self-heals the index; the write is
+      // vector-safe via the needsEmbedOptOut guard below.
+      if (!existing.mime_type) update.mime_type = mimeFor(file.relPath);
     }
   }
 
@@ -105,7 +173,16 @@ async function runFile(file) {
 
   for (const enricher of enrichers) {
     if (enricher.applies && !enricher.applies(file)) continue;
-    if (isCurrent(existing, enricher)) {
+    // A forced enricher re-runs even when up to date (admin "Force" scan). An
+    // embedding stage whose stored vector Meili dropped counts as stale even if
+    // its `embedded` marker survived, so a purged embedding self-heals instead of
+    // being skipped forever (see embeddingLost).
+    const forced = isForced(force, enricher);
+    if (
+      !forced &&
+      !embeddingLost(enricher, existing, config.embedderName) &&
+      isCurrent(existing, enricher)
+    ) {
       skipped.push(enricher.name);
       continue;
     }
@@ -119,17 +196,24 @@ async function runFile(file) {
     };
     try {
       const t0 = process.hrtime.bigint();
-      const fields = (await enricher.enrich({ file, hash, absPath: file.absPath, existing })) || {};
+      // `forced` lets an enricher distinguish an operator Force (full
+      // recompute) from a version-bump refresh (may reuse derived state,
+      // e.g. visual's stored-embedding tag recompute).
+      const fields = (await enricher.enrich({ file, hash, absPath: file.absPath, existing, forced })) || {};
       debugTiming("%s %dms %s", enricher.name, Math.round(Number(process.hrtime.bigint() - t0) / 1e6), file.relPath);
       // An enricher may report a soft failure via an `error` field while still
       // returning (usually empty) output — treat that like a thrown failure, but
       // don't double-log (the enricher already logged on its own `:error`).
+      // The output is NOT merged on a soft failure: a transient error on a
+      // re-run (version bump, force, embeddingLost) must not overwrite
+      // previously good fields — e.g. an OCR timeout returns content:"" and
+      // would wipe the doc's searchable text until a retry succeeded.
       const { error: softError, ...output } = fields;
-      Object.assign(update, output);
       if (softError) {
         update[errorField(enricher)] = String(softError);
         failed.push(enricher.name);
       } else {
+        Object.assign(update, output);
         // Stamp the producing version alongside the output, so a future logic
         // change (a bumped `version`) is detected and regenerated on a full scan.
         update[versionField(enricher)] = enricher.version || 1;
@@ -143,6 +227,14 @@ async function runFile(file) {
     }
   }
 
+  // Opt a not-yet-embedded doc out of Meili's userProvided `image` embedder so
+  // this partial update isn't rejected wholesale for lacking a vector (see
+  // needsEmbedOptOut). Done after the enricher loop so a `visual` vector produced
+  // this pass takes precedence and is never overwritten with null.
+  if (needsEmbedOptOut(update, existing)) {
+    update._vectors = { [config.embedderName]: null };
+  }
+
   // Write only when there's something new (a fresh base doc, or new fields).
   if (!existing || Object.keys(update).length > 1) {
     await meili.updateFields(update);
@@ -151,4 +243,4 @@ async function runFile(file) {
   return { hash, ran, skipped, failed };
 }
 
-module.exports = { runFile, hasAllFields, isCurrent };
+module.exports = { runFile, hasAllFields, hasEmbedding, isCurrent, isForced, embeddingLost, needsEmbedOptOut };

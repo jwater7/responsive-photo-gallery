@@ -1,0 +1,11 @@
+{
+  "name": "rpg-path-safety",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Path-containment primitive shared by the gallery and enrichment services: resolve a caller-supplied sub-path inside a root, or reject it",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test 'test/**/*.test.js'"
+  },
+  "license": "ISC"
+}

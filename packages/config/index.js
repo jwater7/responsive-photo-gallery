@@ -40,6 +40,11 @@ const LEGACY_AUTH_PATH = process.env.LEGACY_AUTH_PATH || '/data/auth'
 
 const EXCLUDES_FILE = path.join(CONFIG_PATH, 'excludes.json')
 
+// Defense-in-depth shared secret between the gallery (writer) and the enrichment
+// API (reader). Same writer/reader split as excludes: the gallery generates +
+// persists it here, the enrichment service does a fresh fail-open raw read.
+const ENRICH_SECRET_FILE = path.join(CONFIG_PATH, 'enrich-secret.json')
+
 // AUTH_PATH (if explicitly set) always wins; otherwise auth defaults under
 // CONFIG_PATH. node-json-db creates the parent dir for the fresh case.
 function authPath() {
@@ -146,6 +151,52 @@ async function setExcludes(list) {
   return normalized
 }
 
+// ---- enrichment shared secret: writer side (gallery) -----------------------
+
+// Generated once and cached in-process for sync reads by the enrich proxy. The
+// gallery is a single process (bin/www: createApp().then(listen)), so the
+// generate-if-absent below cannot race itself. NOTE: running multiple gallery
+// processes/containers against one CONFIG_PATH would reintroduce a generate
+// race (two distinct secrets, last-write-wins, the loser's header then 401s) —
+// out of scope for the current single-instance deployment.
+let _enrichSecret = null
+let _enrichSecretDb = null
+function enrichSecretDb() {
+  if (!_enrichSecretDb) _enrichSecretDb = openDb(ENRICH_SECRET_FILE)
+  return _enrichSecretDb
+}
+
+// Idempotent generate-if-absent: read the persisted secret, or mint a strong one
+// and persist it (saveOnPush writes the file). Returns the secret (or null).
+// Written once, ever — never rewritten in steady state. Call once at gallery
+// startup. BEST-EFFORT: this is an optional defense-in-depth layer, so a
+// persist failure (e.g. CONFIG_PATH not writable) leaves the secret null and the
+// gate off rather than failing the gallery's boot.
+async function ensureEnrichSecret() {
+  try {
+    _enrichSecret = await enrichSecretDb().getData('/secret')
+    return _enrichSecret
+  } catch (_) {
+    /* not yet generated — mint + persist below */
+  }
+  try {
+    const crypto = require('crypto') // lazy: the read-only reader never loads it
+    const secret = crypto.randomBytes(32).toString('base64')
+    await enrichSecretDb().push('/secret', secret)
+    _enrichSecret = secret
+  } catch (err) {
+    debugErr('enrich secret persist failed (gate stays off): %s', err.message)
+    _enrichSecret = null
+  }
+  return _enrichSecret
+}
+
+// Sync accessor for the value cached by ensureEnrichSecret(). null until that
+// has run (which it does before the gallery serves any request).
+function getEnrichSecret() {
+  return _enrichSecret
+}
+
 // ---- reader side (raw, fail-open; for cross-process read-only consumers) ----
 
 // Fresh JSON read of a config file. Fail-open: any error returns `fallback`.
@@ -165,9 +216,19 @@ function loadExcludes() {
   return data && Array.isArray(data.excludes) ? data.excludes : []
 }
 
+// The enrichment shared secret as the enrichment plane sees it: fresh raw read
+// each call (so the gallery's first write is picked up without a restart),
+// fail-open to null. null means "no secret configured" → the gate is a
+// passthrough (defense-in-depth, never fails closed against its own absence).
+function loadEnrichSecret() {
+  const data = readConfigFile(ENRICH_SECRET_FILE, null)
+  return data && typeof data.secret === 'string' ? data.secret : null
+}
+
 module.exports = {
   CONFIG_PATH,
   EXCLUDES_FILE,
+  ENRICH_SECRET_FILE,
   authPath,
   migrateLegacyAuth,
   normalize,
@@ -175,6 +236,9 @@ module.exports = {
   openDb,
   getExcludes,
   setExcludes,
+  ensureEnrichSecret,
+  getEnrichSecret,
   readConfigFile,
   loadExcludes,
+  loadEnrichSecret,
 }

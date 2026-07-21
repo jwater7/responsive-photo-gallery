@@ -42,6 +42,11 @@
  *                    exactly-colocated, tightly-clustered, and spread-out points
  *                    so the map exercises cluster-split AND spiderfy. The geo
  *                    enricher reads GPS via exifr, so these flow into Meili.
+ *   --no-videos      Skip the per-album video fixtures. By default each album
+ *                    also gets one tiny (1s testsrc) clip per registry video
+ *                    format (.mov/.mp4/.m4v/.webm) so sprite builds exercise
+ *                    the ffmpeg cell path for every format. Needs ffmpeg on
+ *                    PATH; silently skipped (with a warning) when absent.
  *   --clean          Remove existing <prefix>-* album dirs under --out first.
  *   -h, --help       Show this help.
  *
@@ -58,7 +63,9 @@
 
 const fs = require('fs')
 const path = require('path')
+const { spawnSync } = require('child_process')
 const sharp = require('sharp')
+const { VIDEO_EXTS } = require('rpg-media-types')
 
 // --- arg parsing ------------------------------------------------------------
 
@@ -75,6 +82,7 @@ function parseArgs(argv) {
     concurrency: 8,
     clean: false,
     geo: false,
+    videos: true,
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -119,6 +127,9 @@ function parseArgs(argv) {
         break
       case '--geo':
         opts.geo = true
+        break
+      case '--no-videos':
+        opts.videos = false
         break
       default:
         console.error(`Unknown option: ${a}\n`)
@@ -294,6 +305,55 @@ async function writeCell(file, { size, hue, seq, total, album, date, geo }) {
   await fs.promises.utimes(file, date, date)
 }
 
+// --- video generation ---------------------------------------------------------
+
+const ffmpegAvailable = () =>
+  spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0
+
+// One tiny (1s, 320x240 testsrc) clip per registry video format, dated just
+// after the album's images so they land in the last month group. Every format
+// matters: the sprite build must render a cell for each via ffmpeg (the
+// .m4v/.webm-fed-to-sharp regression is exactly what these fixtures catch).
+function writeVideos(albumDir, { total, months, startDate }) {
+  const exts = [...VIDEO_EXTS]
+  const made = []
+  for (let v = 0; v < exts.length; v++) {
+    const date = captureDateFor(
+      total + v,
+      total + exts.length,
+      months,
+      startDate
+    )
+    const name = `clip-${String(v + 1).padStart(2, '0')}${exts[v]}`
+    const file = path.join(albumDir, name)
+    const res = spawnSync(
+      'ffmpeg',
+      [
+        '-y',
+        '-loglevel',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=duration=1:size=320x240:rate=10',
+        '-pix_fmt',
+        'yuv420p',
+        '-metadata',
+        `creation_time=${date.toISOString()}`,
+        file,
+      ],
+      { stdio: ['ignore', 'ignore', 'inherit'] }
+    )
+    if (res.status !== 0) {
+      console.warn(`  warning: ffmpeg failed for ${name}; skipped`)
+      continue
+    }
+    fs.utimesSync(file, date, date)
+    made.push(name)
+  }
+  return made
+}
+
 // tiny concurrency-limited map
 async function mapLimit(items, limit, fn) {
   const ret = new Array(items.length)
@@ -341,6 +401,10 @@ async function main() {
   await fs.promises.mkdir(outRoot, { recursive: true })
 
   const t0 = Date.now()
+  const withVideos = opts.videos && ffmpegAvailable()
+  if (opts.videos && !withVideos) {
+    console.warn('ffmpeg not found on PATH; skipping video fixtures')
+  }
   let grandTotal = 0
   for (let a = 0; a < counts.length; a++) {
     const total = counts[a]
@@ -372,6 +436,16 @@ async function main() {
     })
     process.stdout.write('\n')
     grandTotal += total
+
+    if (withVideos) {
+      const made = writeVideos(albumDir, {
+        total,
+        months: opts.months,
+        startDate,
+      })
+      if (made.length) console.log(`  ${album}: videos ${made.join(', ')}`)
+      grandTotal += made.length
+    }
   }
 
   const secs = ((Date.now() - t0) / 1000).toFixed(1)

@@ -20,6 +20,14 @@ module.exports = {
   ocrEngine: process.env.OCR_ENGINE || "native",
   ocrLang: process.env.OCR_LANG || "eng",
   ocrPreprocess: /^(1|true|yes)$/i.test(process.env.OCR_PREPROCESS || ""),
+  // Preprocess backend. Default is in-process sharp (libvips, already bundled for
+  // CLIP). Set OCR_PREPROCESS_USE_MAGICK=true to use the legacy ImageMagick
+  // `convert` path instead (requires `imagemagick` in the image; falls back to
+  // sharp if absent). Kept as an opt-in for parity/revert and BMP, which libvips
+  // can't decode.
+  ocrPreprocessUseMagick: /^(1|true|yes)$/i.test(
+    process.env.OCR_PREPROCESS_USE_MAGICK || ""
+  ),
   // Cap the OCR input resolution. Feeding Tesseract a full-res phone photo is
   // pathological: past ~2500px on the long edge its layout/LSTM cost explodes
   // (a 4032px image measured ~36 min vs <1s at 1500px). This is a SAFETY cap,
@@ -33,7 +41,7 @@ module.exports = {
   // matches the preprocess resize target so the two passes agree.
   ocrDownscaleMaxDim: intEnv("OCR_DOWNSCALE_MAX", 1500),
   // Hard wall-clock cap (ms) on a single Tesseract invocation, so a file that
-  // still lands past the cliff (downscale disabled, or `convert` failed and we
+  // still lands past the cliff (downscale disabled, or preprocess failed and we
   // fell back to the original) fails fast into `ocr_error` instead of pinning a
   // worker slot for tens of minutes. Derived: ~100x a normal 1500px OCR (~1-2s)
   // yet ~18x below the 36-min full-res blowup — never trips legitimate work,
@@ -74,17 +82,79 @@ module.exports = {
   // Hybrid search blend when the caller doesn't specify (0 = keyword only,
   // 1 = semantic only).
   defaultSemanticRatio: parseFloat(process.env.DEFAULT_SEMANTIC_RATIO || "0.5"),
+  // --- Smart-search relative cutoff (`smartCutoff` on /search) --------------
+  // CLIP-style text→image ranking scores carry almost no MAGNITUDE signal:
+  // measured (2026-07-03 prod, 2026-07-11 fixtures), all semantic scores live
+  // in a flat ~0.60-0.64 band and genuine matches beat the junk band by only
+  // 0.001-0.013 — which is why the old absolute rankingScoreThreshold (0.62)
+  // returned 0-4 hits or everything. The replacement trims RELATIVE to the
+  // best hit, bounded on both sides:
+  //   window — keep hits scoring within this of the top. 0.02 ≈ 2× the
+  //     largest genuine-match margin observed (so trailing real matches are
+  //     never cut) while below the measured junk-band width (~0.03).
+  //   min — always keep at least this many by rank: a keyword-matched hit
+  //     scores ~1.0 and would otherwise window away every semantic hit.
+  //     24 ≈ a few grid rows of "best guesses".
+  //   max — hard cap: in the flat-curve regime (no distinct top) smart search
+  //     degrades to "the N best matches, ranked" instead of re-ordering the
+  //     entire library; 200 = two search-page fetches. Must stay ≤ the
+  //     MANUAL_SORT_MAX (1000) working-set fetch.
+  smartCutoffWindow: parseFloat(process.env.SMART_CUTOFF_WINDOW || "0.02"),
+  smartMinResults: intEnv("SMART_MIN_RESULTS", 24),
+  smartMaxResults: intEnv("SMART_MAX_RESULTS", 200),
   // Zero-shot tagging: softmax temperature scale over labels, min probability,
   // and max tags per image.
   tagScale: parseFloat(process.env.TAG_SCALE || "50"),
   tagThreshold: parseFloat(process.env.TAG_THRESHOLD || "0.05"),
   maxTags: intEnv("MAX_TAGS", 6),
 
+  // --- Video keyframes (CLIP embeddings + OCR on frames) --------------------
+  // Frames sampled per video. Sample points are spread evenly across the middle
+  // 60% of the clip (20%→80%): the edges are skipped because intros/outros and
+  // fade-to-black frames are the least representative content, and 3 is the
+  // smallest count that still covers beginning/middle/end distinctly. Each
+  // frame costs one 4K seek+decode plus one CLIP embed and one OCR pass, so
+  // this knob is the per-video cost dial.
+  videoFrameCount: intEnv("VIDEO_EMBED_FRAMES", 3),
+  // Hard wall-clock cap (ms) per ffprobe/ffmpeg subprocess (child killed on
+  // expiry). Derived: a single-keyframe seek+decode of a 4K clip on the slowest
+  // supported host (FX-6300-class, software decode only) measures in the tens
+  // of seconds worst case; 60s gives ~3x headroom while still reclaiming a
+  // wedged process — a corrupt/truncated container hanging ffmpeg forever is
+  // the known failure mode this guards (cf. OCR_TIMEOUT_MS). 0 disables.
+  videoSubprocessTimeoutMs: intEnv("VIDEO_FFMPEG_TIMEOUT_MS", 60000),
+
   // --- Geo (EXIF + offline reverse geocoding) -------------------------------
   // GeoNames dumps bundled into the image at build time (no runtime network).
   geonamesCitiesPath: process.env.GEONAMES_CITIES || "/data/geonames/cities15000.txt",
   geonamesAdmin1Path: process.env.GEONAMES_ADMIN1 || "/data/geonames/admin1CodesASCII.txt",
   geonamesCountryPath: process.env.GEONAMES_COUNTRY || "/data/geonames/countryInfo.txt",
+  // Forward-geocode a photo's embedded caption to a map pin (geo_source
+  // "inferred") when it has no GPS. On by default; OCR_-style off switch since
+  // it's best-effort (cities only) and an operator may not want inferred pins.
+  geoInferFromCaption: !/^(0|false|no|off)$/i.test(process.env.GEO_INFER_FROM_CAPTION || ""),
+
+  // H3 cell-id resolutions persisted per geotagged doc (one facetable field each,
+  // `cell_r<res>`) for the map's server-side density. Comma list, coarse→fine.
+  // Defaults span world (r1) → street (r11): far/mid zoom use the coarse cells,
+  // near zoom the fine ones so a dense pile's true (uncapped) count still comes
+  // from the facet while its bubble stays on-screen. See lib/geo-cells.js.
+  geoCellResolutions: (process.env.GEO_CELL_RESOLUTIONS || "1,2,3,4,5,6,7,8,9,10,11")
+    .split(",").map((s) => parseInt(s.trim(), 10)).filter(Number.isFinite),
+  // Max facet values returned per query. Must exceed the cell count a viewport
+  // can show so density counts aren't truncated (MeiliSearch default is 100).
+  geoFacetMaxValues: intEnv("GEO_FACET_MAX_VALUES", 1000),
+
+  // Ceiling on offset+limit paging (MeiliSearch pagination.maxTotalHits;
+  // default 1000). Every offset-paged consumer silently stops at this value:
+  // the album enrichment overlay (filter album=X), a dense cell's popup
+  // paging, and the search page's infinite scroll. It therefore has to cover
+  // the largest filter-scoped set the UI can page through — in the worst case
+  // the whole index (one album/cell holding most of the library), so it's
+  // sized to the library scale (~60k docs) with headroom, not to a per-page
+  // number. Meili's 1000 default only exists to bound deep-pagination cost;
+  // raising it costs nothing until someone actually pages that deep.
+  searchMaxTotalHits: intEnv("SEARCH_MAX_TOTAL_HITS", 100000),
 
   // Realtime filesystem watcher. Enabled by default; set WATCH_ENABLED=false to
   // turn it off and rely solely on the periodic reconcile (e.g. on hosts where

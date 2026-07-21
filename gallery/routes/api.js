@@ -10,6 +10,7 @@ const requireAuth = require('../lib/require-auth')
 const imageHandler = require('../handlers/image-handler')
 const albumBuild = require('../handlers/album-build')
 const runtimeConfig = require('rpg-config')
+const { resolveWithin } = require('rpg-path-safety')
 
 // Enrichment feature flags, folded into /ping so the client bootstraps auth +
 // flags in one request. Guarded require: the gallery still pings fine if the
@@ -373,7 +374,9 @@ module.exports = ({ passport, auth }) => {
 
     handler.image(album, image, thumb, (err, image_buffer, content_type) => {
       if (err) {
-        res.status(500)
+        // The handler reports caller errors as { error: { code: 400, ... } } —
+        // don't flatten them all to 500.
+        res.status(err && err.error && err.error.code ? err.error.code : 500)
         res.json(err)
         res.end()
         return
@@ -465,7 +468,8 @@ module.exports = ({ passport, auth }) => {
 
     handler.video(album, image, (err, video_file) => {
       if (err) {
-        res.status(500)
+        // Same caller-error mapping as /image above.
+        res.status(err && err.error && err.error.code ? err.error.code : 500)
         res.json(err)
         res.end()
         return
@@ -547,11 +551,8 @@ module.exports = ({ passport, auth }) => {
         .status(400)
         .json({ error: { code: 400, message: 'Invalid album' } })
     }
-    const base = path.resolve(dir)
-    const file = path.resolve(path.join(base, relPath))
-    // Boundary test, not a string prefix (a bare startsWith would also accept a
-    // sibling like "<base>-evil"): require the separator or an exact root match.
-    if (file !== base && !file.startsWith(base + path.sep)) {
+    const file = resolveWithin(dir, relPath)
+    if (!file) {
       return res
         .status(400)
         .json({ error: { code: 400, message: 'Invalid path' } })
@@ -676,6 +677,45 @@ module.exports = ({ passport, auth }) => {
 
   /**
    * @swagger
+   * /album-rebuild:
+   *   post:
+   *     description: >-
+   *       Drop an album's cached manifest and rebuild it in the background
+   *       (non-blocking; poll /album-status for progress). The cache only
+   *       invalidates itself when the album's FILES change, so a manifest
+   *       built by older code (e.g. one that skipped formats the current
+   *       build supports) needs this on-demand rebuild. Thumbnails and
+   *       sprite sheets are overwritten in place.
+   *     parameters:
+   *       - name: album
+   *         in: query
+   *         required: true
+   *         schema: { type: string }
+   *     responses:
+   *       202: { description: Rebuild started (or already ready) }
+   *       400: { description: Missing/invalid album }
+   *       404: { description: Unknown, excluded, or empty album }
+   *     security:
+   *       - ApiKeyAuth: []
+   */
+  router.post('/album-rebuild', required, async (req, res) => {
+    try {
+      const album = req.query.album || (req.body && req.body.album)
+      if (!album) {
+        return res
+          .status(400)
+          .json({ error: { code: 400, message: 'album is required' } })
+      }
+      const result = await albumBuild.rebuildAlbum(album)
+      return res.status(202).json({ result: { state: result.state } })
+    } catch (err) {
+      const code = err.code || 500
+      return res.status(code).json({ error: { code, message: err.message } })
+    }
+  })
+
+  /**
+   * @swagger
    * /album-sprite:
    *   get:
    *     description: A cached sprite sheet (JPEG) by file name from the manifest.
@@ -723,11 +763,8 @@ module.exports = ({ passport, auth }) => {
   router.get('/album-tags', required, async (req, res) => {
     const album = req.query.album
     const tag = req.query.tag || 'favorite'
-    const base = path.resolve(tags_path)
-    const dir = path.resolve(path.join(tags_path, album || '', tag))
-    // Boundary test, not a string prefix (a bare startsWith would also accept a
-    // sibling like "<base>-evil"): require the separator or an exact root match.
-    if (dir !== base && !dir.startsWith(base + path.sep)) {
+    const dir = resolveWithin(tags_path, path.join(album || '', tag))
+    if (!dir) {
       return res
         .status(400)
         .json({ error: { code: 400, message: 'Invalid path' } })

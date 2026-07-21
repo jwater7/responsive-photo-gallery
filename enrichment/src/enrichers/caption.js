@@ -18,32 +18,10 @@
 const exifr = require("exifr");
 
 const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { asText, pickCaption } = require("../lib/caption-text");
 
 const debugErr = require("debug")("responsive-photo-gallery:caption:error");
 debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/server.js)
-
-/** Coerce exifr's value (string, or { value } / array for XMP langfields) to a trimmed string. */
-function asText(v) {
-  if (!v) return "";
-  if (typeof v === "string") return v.trim();
-  if (Array.isArray(v)) return asText(v[0]);
-  if (typeof v === "object" && v.value) return asText(v.value);
-  return "";
-}
-
-/**
- * Pick the caption from a parsed exifr metadata object.
- * Precedence: XMP dc:description (richest) > IPTC Caption > IFD0 ImageDescription.
- */
-function pickCaption(meta) {
-  if (!meta) return "";
-  return (
-    asText(meta.description) ||
-    asText(meta.Caption) ||
-    asText(meta["Caption-Abstract"]) ||
-    asText(meta.ImageDescription)
-  );
-}
 
 module.exports = {
   name: "caption",

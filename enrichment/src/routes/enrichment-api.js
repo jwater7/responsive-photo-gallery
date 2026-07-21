@@ -9,11 +9,18 @@ const scanState = require("../lib/scan-state");
 const configView = require("../lib/config-view");
 const reconcile = require("../lib/reconcile");
 const queue = require("../lib/queue");
+const enrichers = require("../enrichers");
 const config = require("../lib/config");
 const embedder = require("../lib/embedder");
 const geonames = require("../lib/geonames");
+const geoCells = require("../lib/geo-cells");
 const path = require("path");
-const { SUPPORTED_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { MEDIA_FORMAT_REGEXP } = require("../lib/walk-dir");
+const { VIDEO_MIME_TYPES } = require("rpg-media-types");
+const { MANUAL_SORT_MAX, sortHitsByKeys } = require("../lib/search-sort");
+const { applySmartCutoff } = require("../lib/smart-cutoff");
+const { needsEmbedOptOut } = require("../lib/pipeline");
+const { resolveWithin } = require("rpg-path-safety");
 
 const debugErr = require("debug")("responsive-photo-gallery:enrichment-api:error");
 debugErr.enabled = true; // errors are always-on, not gated by DEBUG (see bin/server.js)
@@ -37,6 +44,8 @@ const router = express.Router();
  *             offset: { type: integer }
  *             limit: { type: integer }
  *             sort: { type: string, enum: ["date:desc", "date:asc"], description: "Order by capture date (EXIF, mtime fallback); omit for relevance order" }
+ *             excludeVideos: { type: boolean, description: "Filter out video documents (mime_type in the registry's video MIME types)" }
+ *             smartCutoff: { type: boolean, description: "Hybrid only - trim results relative to the best hit's score (window/min/max are server config) instead of an absolute rankingScoreThreshold" }
  *     responses:
  *       200: { description: Search results }
  *       400: { description: Missing query }
@@ -67,6 +76,19 @@ router.post("/search", async (req, res) => {
   }
   if (body.takenAfter) filters.push(`taken_at >= "${body.takenAfter}"`);
   if (body.takenBefore) filters.push(`taken_at <= "${body.takenBefore}"`);
+  // Map opt-out of the lower-confidence caption-inferred pins. Filtering here (not
+  // client-side) keeps the `limit` budget on real pins. All bbox-matched docs
+  // have a geo_source, so `!=` doesn't need a missing-field guard.
+  if (body.excludeInferred) filters.push('geo_source != "inferred"');
+  // Search-page opt-out of video documents. The MIME list is derived from the
+  // rpg-media-types registry, so a new video format is covered with no change
+  // here. NOT-form on purpose: Meili's NOT is a set complement that also
+  // matches docs MISSING the attribute (verified against v1.47), so images
+  // from before mime_type existed stay visible until the scan-time backfill
+  // stamps them (see pipeline.runFile).
+  if (body.excludeVideos) {
+    filters.push(`NOT mime_type IN [${VIDEO_MIME_TYPES.map((m) => `"${m}"`).join(", ")}]`);
+  }
   if (filters.length) opts.filter = filters;
 
   // Optional relevance cutoff (0..1). Semantic/hybrid ranks every document, so
@@ -79,20 +101,21 @@ router.post("/search", async (req, res) => {
   if (body.showRankingScore) opts.showRankingScore = true;
 
   // Optional result ordering. Only an explicit, whitelisted date sort is
-  // honored; the default (and anything unrecognized) leaves results in
-  // relevance order (keyword ranking, or the hybrid score for a smart search).
-  // Meili applies `sort` AFTER ranking, so a semantic search sorted by date
-  // keeps its rankingScoreThreshold filtering but drops the relevance ordering
-  // within the surviving set — intended. Each value maps to a two-key sort:
-  // `taken_at` (EXIF capture date) first, then `last_modified` (file mtime) so
-  // photos with no EXIF date fall back to mtime and land after the dated ones.
+  // honored; the default (and anything unrecognized) leaves results in relevance
+  // order (keyword ranking, or the hybrid score for a smart search). Each value
+  // maps to a two-key sort: `taken_at` (EXIF capture date) first, then
+  // `last_modified` (file mtime) so photos with no EXIF date fall back to mtime
+  // and land after the dated ones.
+  //
+  // How the sort is APPLIED depends on the search kind, decided below once we
+  // know whether a query vector was built: Meili honors `sort` for a
+  // keyword/filter search but SILENTLY IGNORES it for a hybrid/vector search, so
+  // the smart path is sorted server-side (see `manualSort`).
   const SORT_OPTIONS = {
     "date:desc": ["taken_at:desc", "last_modified:desc"],
     "date:asc": ["taken_at:asc", "last_modified:asc"],
   };
-  if (body.sort && SORT_OPTIONS[body.sort]) {
-    opts.sort = SORT_OPTIONS[body.sort];
-  }
+  const sortKeys = (body.sort && SORT_OPTIONS[body.sort]) || null;
 
   // Need either a text query or at least one filter (e.g. a map viewport).
   if (!query && !filters.length) {
@@ -113,7 +136,47 @@ router.post("/search", async (req, res) => {
     }
   }
 
+  // Decide how the date sort is applied. A hybrid search (vector actually built)
+  // ignores Meili's `sort`, so sort that path ourselves; a keyword/filter search
+  // lets Meili do it. `opts.hybrid` is set only when the vector build above
+  // succeeded, so a failed embedding correctly falls back to the keyword path.
+  const manualSort = !!(sortKeys && opts.hybrid);
+  if (sortKeys && !manualSort) opts.sort = sortKeys;
+
+  // Relative relevance trim (see lib/smart-cutoff.js). Hybrid-only by
+  // construction: keyword scores are already discriminative, and on the
+  // keyword fallback path (query embedding failed) the flag is simply
+  // ignored rather than erroring the search.
+  const smartCutoff = !!body.smartCutoff && !!opts.hybrid;
+
   try {
+    if (manualSort || smartCutoff) {
+      // Pull the whole ranked match set (capped by MANUAL_SORT_MAX), post-
+      // process it ourselves — trim to the relevant head first, THEN date-sort
+      // the survivors (so "Smart + Newest" = relevant matches, newest first) —
+      // and serve just the caller's page. Each page re-fetches the capped set;
+      // cheap, and `total` is exact for the trimmed set.
+      const results = await meili.search(query, {
+        ...opts,
+        limit: MANUAL_SORT_MAX,
+        offset: 0,
+        // The trim reads _rankingScore; harmless extra field for the caller.
+        showRankingScore: smartCutoff || opts.showRankingScore,
+      });
+      let hits = results.hits;
+      if (smartCutoff) hits = applySmartCutoff(hits, config);
+      if (manualSort) hits = sortHitsByKeys(hits, sortKeys);
+      const pageOffset = Number(offset);
+      const pageLimit = Number(limit);
+      return res.status(200).json({
+        query,
+        offset: pageOffset,
+        limit: pageLimit,
+        semanticRatio: opts.hybrid ? semanticRatio : 0,
+        total: hits.length,
+        results: hits.slice(pageOffset, pageOffset + pageLimit),
+      });
+    }
     const results = await meili.search(query, opts);
     return res.status(200).json({
       query,
@@ -144,25 +207,59 @@ router.post("/search", async (req, res) => {
  *       and enqueues only new/changed files — the cheap recurring pass (the daily
  *       cron uses this). Poll GET /status for progress. Returns "running" if a
  *       reconcile enqueue is already underway.
+ *
+ *       Optional `force` re-runs enrichers even on up-to-date docs (bypasses the
+ *       version/up-to-date skip): `true` for all enrichers, or a list of enricher
+ *       names (e.g. ["ocr"]). Optional `path` scopes the scan to one album,
+ *       sub-folder, or file (a relative path prefix). Forcing implies a full
+ *       enqueue of the in-scope files.
  *     produces: application/json
  *     responses:
  *       200: { description: Reconcile started or already running }
- *       400: { description: Invalid type }
+ *       400: { description: Invalid type, force, or path }
  */
 router.post("/enrichment-sync", async (req, res) => {
-  const type = (req.body && req.body.type) || "full";
+  const body = req.body || {};
+  const type = body.type || "full";
   if (!["full", "delta"].includes(type)) {
     return res.status(400).json({
       error: { code: 400, message: 'Invalid type. Use "full" or "delta"' },
     });
   }
 
-  const { started, status } = await reconcile.triggerReconcile(type);
+  // force: false (default), true (all enrichers), or a list of known names.
+  const force = body.force;
+  if (force !== undefined && force !== false && force !== true) {
+    const names = enrichers.map((e) => e.name);
+    if (!Array.isArray(force) || !force.every((n) => names.includes(n))) {
+      return res.status(400).json({
+        error: {
+          code: 400,
+          message: `Invalid force. Use true or a list of enricher names: ${names.join(", ")}`,
+        },
+      });
+    }
+  }
+
+  // path: optional relative path scope (album / sub-folder / file).
+  const pathScope = body.path;
+  if (pathScope !== undefined && typeof pathScope !== "string") {
+    return res.status(400).json({
+      error: { code: 400, message: "Invalid path. Use a relative path string." },
+    });
+  }
+
+  const { started, status } = await reconcile.triggerReconcile(type, {
+    force: force || false,
+    path: pathScope || null,
+  });
+  const scopeLabel = pathScope ? ` of "${pathScope}"` : "";
+  const forceLabel = force === true ? " (force: all)" : Array.isArray(force) ? ` (force: ${force.join(", ")})` : "";
   return res.status(200).json({
     status,
     type,
     message: started
-      ? `${type === "delta" ? "Delta" : "Full"} scan started`
+      ? `${type === "delta" ? "Delta" : "Full"} scan${scopeLabel} started${forceLabel}`
       : "Reconcile already in progress",
   });
 });
@@ -217,16 +314,22 @@ router.post("/reap", async (req, res) => {
  */
 router.post("/enqueue", async (req, res) => {
   const rel = req.body && req.body.path;
-  if (!rel || typeof rel !== "string" || rel.includes("..")) {
+  // Shared containment primitive — replaces a '..'-substring test that was both
+  // weaker (a string check, not a resolved-path boundary) and stricter in the
+  // wrong way (it also rejected legitimate names like "a..b.jpg").
+  const absPath = resolveWithin(config.imagePath, typeof rel === "string" ? rel : "");
+  if (!absPath) {
     return res.status(400).json({ error: { code: 400, message: "Valid relative path required" } });
   }
-  if (!SUPPORTED_FORMAT_REGEXP.test(rel)) {
+  // Full media regexp (images AND videos), matching what the pipeline
+  // actually processes — the old image-only pattern rejected video enqueues.
+  if (!MEDIA_FORMAT_REGEXP.test(rel)) {
     return res.status(400).json({ error: { code: 400, message: "Unsupported file type" } });
   }
 
   const relPath = rel.split(path.sep).join("/");
   const album = relPath.includes("/") ? relPath.split("/")[0] : "root";
-  const file = { album, relPath, absPath: path.join(config.imagePath, relPath) };
+  const file = { album, relPath, absPath };
 
   try {
     await queue.enqueueFile(file);
@@ -282,23 +385,100 @@ router.post("/geo", async (req, res) => {
     fields.place_city = place.city;
     fields.place_country = place.country;
   }
+  // Tag the location's H3 cells so a manually-pinned photo participates in the
+  // map's server-side density immediately (not only after a re-enrich).
+  Object.assign(fields, geoCells.cellFields(lat, lng));
 
   try {
     await meili.init();
-    // Only an already-indexed image can be pinned. A partial update preserves
-    // its existing _vectors; writing a brand-new doc would fail the embedder's
-    // "vectors required" validation.
+    // Only an already-indexed image can be pinned (writing a brand-new doc
+    // here would bypass the pipeline's base fields).
     const existing = await meili.getDoc(hash);
     if (!existing) {
       return res.status(404).json({
         error: { code: 404, message: "Image not indexed; cannot assign a location" },
       });
     }
+    // The userProvided embedder re-validates vectors on EVERY partial update:
+    // a write to a doc with no stored vector (a video, or an image the visual
+    // stage hasn't embedded yet) fails the WHOLE task after this response has
+    // already returned ok — the pin would be silently discarded (the same
+    // write-loss mechanism as the frozen-docs incident). Opt out exactly like
+    // the pipeline does; never emitted for an embedded doc, which would wipe
+    // its stored vector.
+    if (needsEmbedOptOut(fields, existing)) {
+      fields._vectors = { [config.embedderName]: null };
+    }
     await meili.updateFields(fields);
     return res.status(200).json({ status: "ok", _geo: fields._geo, place: fields.place || null });
   } catch (err) {
     debugErr("manual geo failed: %s", err.message);
     return res.status(503).json({ error: { code: 503, message: "MeiliSearch unavailable" } });
+  }
+});
+
+/**
+ * @swagger
+ * /geo-density:
+ *   post:
+ *     summary: True photo count per H3 cell for a map viewport (no sampling)
+ *     description: >-
+ *       Given a bounding box and an H3 resolution, returns each populated cell's
+ *       exact count (via faceting on the precomputed cell-id field) plus the
+ *       cell's drawable center and hexagon, and an exact viewport total. Honors
+ *       the same `excludeInferred` filter as /search. This replaces the old
+ *       client-side clustering of a 500-doc sample.
+ *     produces: application/json
+ *     responses:
+ *       200: { description: Per-cell counts + geometry and a viewport total }
+ *       400: { description: Missing/invalid geoBoundingBox or resolution }
+ *       503: { description: MeiliSearch unavailable }
+ */
+router.post("/geo-density", async (req, res) => {
+  const body = req.body || {};
+  const bbox = body.geoBoundingBox;
+  const resolution = parseInt(body.resolution, 10);
+  if (!Array.isArray(bbox) || bbox.length !== 2) {
+    return res.status(400).json({
+      error: { code: 400, message: "geoBoundingBox [[topRightLat,topRightLng],[bottomLeftLat,bottomLeftLng]] is required" },
+    });
+  }
+  if (!geoCells.RESOLUTIONS.includes(resolution)) {
+    return res.status(400).json({
+      error: { code: 400, message: `resolution must be one of: ${geoCells.RESOLUTIONS.join(", ")}` },
+    });
+  }
+
+  const field = geoCells.fieldName(resolution);
+  const filters = [
+    // MeiliSearch order: [topRight(maxLat,maxLng), bottomLeft(minLat,minLng)].
+    `_geoBoundingBox([${bbox[0][0]}, ${bbox[0][1]}], [${bbox[1][0]}, ${bbox[1][1]}])`,
+  ];
+  // Mirror /search: drop the lower-confidence caption-inferred pins on request.
+  if (body.excludeInferred) filters.push('geo_source != "inferred"');
+  const query = typeof body.query === "string" ? body.query : "";
+
+  try {
+    // One faceted query yields the per-cell counts (facetDistribution) AND the
+    // exact viewport total (estimatedTotalHits); limit 0 — we want counts, not docs.
+    const result = await meili.search(query, { filter: filters, facets: [field], limit: 0 });
+    const dist = (result.facetDistribution && result.facetDistribution[field]) || {};
+    const cells = Object.entries(dist).map(([cell, count]) => ({
+      cell,
+      count,
+      center: geoCells.cellCenter(cell),
+      hexagon: geoCells.cellHexagon(cell),
+    }));
+    return res.status(200).json({
+      resolution,
+      total: result.estimatedTotalHits ?? cells.reduce((s, c) => s + c.count, 0),
+      cells,
+    });
+  } catch (err) {
+    debugErr("geo-density failed: %s", err.message);
+    return res.status(503).json({
+      error: { code: 503, message: "density unavailable - unable to reach MeiliSearch" },
+    });
   }
 });
 
@@ -340,6 +520,11 @@ router.get("/index-stats", async (req, res) => {
     return res.status(200).json({
       totalDocs: stats.numberOfDocuments || 0,
       indexing: !!stats.isIndexing,
+      // Failed Meili tasks (index-wide). Nonzero => writes are being silently
+      // rejected downstream of the pipeline (updateFields awaits only the enqueue),
+      // e.g. the userProvided-embedder vector rejection that froze docs. Surfacing
+      // it here makes that silent data loss visible in the admin panel.
+      failedTasks: await meili.failedTaskCount(),
       coverage: {
         // visual.js writes `embedded: true` alongside the stored _vectors.
         embeddings: fd.embedded || 0,
@@ -362,6 +547,34 @@ router.get("/index-stats", async (req, res) => {
     return res.status(503).json({
       error: { code: 503, message: "MeiliSearch unavailable" },
     });
+  }
+});
+
+/**
+ * @swagger
+ * /clear-failed-tasks:
+ *   post:
+ *     summary: Delete the retained FAILED Meili task history
+ *     description: >-
+ *       Resets the `failedTasks` health signal (see /index-stats) by deleting
+ *       Meili's retained failed tasks. Meili only allows deleting finished tasks;
+ *       this scopes to failed. Deletion is asynchronous (Meili enqueues a
+ *       taskDeletion task), so the response reports that task, not a final count —
+ *       re-fetch /index-stats to confirm the count dropped. Intended to be run
+ *       only AFTER the underlying cause of the failures is fixed, otherwise the
+ *       count simply climbs again.
+ *     produces: application/json
+ *     responses:
+ *       200: { description: Deletion enqueued }
+ *       503: { description: MeiliSearch unavailable }
+ */
+router.post("/clear-failed-tasks", async (req, res) => {
+  try {
+    const task = await meili.clearFailedTasks();
+    return res.status(200).json({ status: "started", task });
+  } catch (err) {
+    debugErr("clear-failed-tasks failed: %s", err.message);
+    return res.status(503).json({ error: { code: 503, message: "MeiliSearch unavailable" } });
   }
 });
 

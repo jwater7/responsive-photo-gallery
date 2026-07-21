@@ -65,6 +65,32 @@ that the container entrypoint rewrites at startup, so one image works at any pat
 
 See [Production deployment](#production-deployment) for how these are applied.
 
+## Supported media formats
+
+"What counts as a photo or a video" is defined once, in the shared
+`packages/media-types` (`rpg-media-types`) workspace package: the image/video
+extension sets, the `isImage`/`isVideo`/`isMedia` predicates, the
+extension→MIME map, the filter regexps derived from those same sets, and the
+excludes-aware directory walker every plane uses (album builds,
+`/list`/`/thumbnails`, enrichment scanning). To add a format, add its extension
+and MIME type there — every consumer picks it up with no other code change.
+
+Two support planes are distinct on purpose:
+
+* **Supported** (the registry): the file is walked, listed, served, and gets
+  metadata-only enrichment (geo pin, caption) — e.g. `.heic` GPS is read by
+  exifr regardless of image decoders.
+* **Decodable here** (probed from the running build's sharp at startup):
+  pixel-decoding consumers (sprite/thumbnail rendering, visual tags/embedding,
+  OCR) additionally require an actual decoder. HEIC/HEIF/AVIF depend on how the
+  bundled libvips was built; BMP has no sharp decoder in any build. Files a
+  build can't decode are skipped with a recorded reason (never silently) and
+  are picked up automatically by a later build that can decode them.
+
+**Breaking change (excludes):** files under an admin-excluded directory are now
+absent from `/api/v1/list` and `/api/v1/thumbnails` responses, matching every
+other plane (albums, search, map, enrichment), which already hid them.
+
 ## Image enrichment, search & map
 
 An optional, isolated enrichment plane adds OCR, semantic ("smart") search, and
@@ -130,6 +156,88 @@ MeiliSearch) — is bind-mounted under `./debug-data` and persists across
 restarts. To start fresh, delete the relevant subdirectories: `auth` (login +
 keys) and `tags` (favorites) are durable user state; `cache`, `meili`, and
 `redis` are regenerable (rebuilt / re-indexed on next run).
+
+### Generating test images (programmatically)
+
+`./debug-data/pics/<album>/` is just a folder of images, so you can synthesize
+test albums instead of copying real photos. Two things matter:
+
+- **Unique content per file** — documents are keyed by *content hash*, so
+  byte-identical files collapse into one. Vary each image (a colour + label).
+- **GPS for the map** — the geo enricher reads EXIF GPS (`exifr.gps`) and derives
+  the H3 density cells from it. Tag images with coordinates to place them on the
+  map; cluster many at (nearly) one spot to exercise the cell grouping.
+
+`sharp` (a workspace dependency) rasterises an SVG to JPEG; `piexifjs` (a tiny
+pure-JS EXIF writer) injects the GPS. Save the script **inside `enrichment/`** (so
+`require('sharp')` resolves — Node looks up `node_modules` from the script's own
+directory) and run it there, after `npm i --no-save piexifjs`:
+
+~~~~
+// gen-test-images.js — node gen-test-images.js <album> <count> <lat> <lng> <jitterDeg>
+//   node gen-test-images.js test-grouping 30  48.8584   2.2945   0.00005   (Eiffel: circle, then thumbnails near zoom)
+//   node gen-test-images.js dense-spot    100 -33.8568  151.2153 0.00002   (>60 in one cell: dense circle at every zoom)
+const fs = require('fs'), path = require('path');
+const sharp = require('sharp');
+const piexif = require('piexifjs');
+const [album='test', count='20', lat0='47.62', lng0='-122.35', jit='0.00005'] = process.argv.slice(2);
+const OUT = path.resolve('..', 'debug-data', 'pics', album);
+
+const toDMS = d => { const a=Math.abs(d),D=Math.floor(a),mf=(a-D)*60,M=Math.floor(mf),S=Math.round((mf-M)*60*1e4); return [[D,1],[M,1],[S,1e4]]; };
+const gps = (lat,lng) => piexif.dump({ GPS: {
+  [piexif.GPSIFD.GPSLatitudeRef]: lat>=0?'N':'S', [piexif.GPSIFD.GPSLatitude]: toDMS(lat),
+  [piexif.GPSIFD.GPSLongitudeRef]: lng>=0?'E':'W', [piexif.GPSIFD.GPSLongitude]: toDMS(lng) } });
+
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  for (let i = 1; i <= +count; i++) {
+    const hue = Math.round(360 * i / +count);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360"><rect width="100%" height="100%" fill="hsl(${hue},70%,50%)"/><text x="50%" y="50%" font-size="56" fill="#fff" text-anchor="middle" dominant-baseline="middle">${album} ${i}</text></svg>`;
+    const jpeg = await sharp(Buffer.from(svg)).jpeg().toBuffer();
+    const lat = +lat0 + (Math.random()-0.5)*2*+jit, lng = +lng0 + (Math.random()-0.5)*2*+jit;
+    const out = piexif.insert(gps(lat, lng), jpeg.toString('binary'));   // omit this line for plain (no-geo) images
+    fs.writeFileSync(path.join(OUT, `img_${String(i).padStart(3,'0')}.jpg`), Buffer.from(out, 'binary'));
+  }
+  console.log(`wrote ${count} images to ${OUT}`);
+})();
+~~~~
+
+Then index them: Admin → **Full scan**, or the `enrichment-sync` curl above (a
+delta scan suffices — they're new files). The `jitterDeg` controls how tightly
+images colocate: a few metres drops them all in one H3 cell (one count bubble
+that opens a paged list); past `CELL_THUMB_LIMIT` (60) in a cell it stays a dense
+circle even at max zoom, below it near zoom shows individual thumbnails.
+
+### Map UI regression tests (Playwright)
+
+The `e2e/` suite (`@playwright/test`) drives the running gallery's map through
+deep-link URLs and asserts on the rendered Leaflet DOM — off-screen bubbles,
+marker counts, popups, blank map, console errors — the things unit tests and
+backend queries can't see. `e2e/global-setup.js` logs in once with the debug-data
+admin creds (never printed) and the tests reuse the session.
+
+~~~~
+docker compose up -d                 # stack up, with the test albums below
+npx playwright install chromium      # one-time browser download
+npm run e2e                          # headless; HTML report in playwright-report/
+npm run e2e:ui                       # interactive debugger (time-travel + DOM)
+~~~~
+
+Add cases to `e2e/map.spec.js` (each opens a `/map?lat=..&lng=..&z=..` deep-link
+and asserts with `expect`). Pair with the generated test albums above (a dense
+pile, a small group) so the zoom ladder is exercised end to end. Point at a
+different target with `MAP_CHECK_URL`.
+
+One fixture is committed as a script because it targets a specific behaviour the
+big hotspots can't: `node gallery/scripts/gen-map-fixtures.js` writes
+`test-colocated-small` — 3 spots ~40 m apart near Reykjavik with 2 **exactly
+colocated** photos each (6 photos, 3 coordinates). The big `--geo` hotspots pile
+90+ on one point, so they always exceed `CELL_THUMB_LIMIT` (60) and render as a
+dense bubble; this small group stays in the sparse path, where co-located photos
+would otherwise stack invisibly (the map showed 3 markers for a cell of 6). After
+generating, index the new path (`enrichment-sync` with `"path":"test-colocated-small"`,
+or Admin → Full scan). The `colocated…` / `deep-link popup…` specs deep-link to
+`lat=64.1466&lng=-21.9426`.
 
 ### Local development (native, with hot reload)
 

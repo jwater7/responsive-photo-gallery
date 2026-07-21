@@ -26,6 +26,8 @@ export default function Page() {
 
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [loginError, setLoginError] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const handleUsernameChange = (e) => {
     setUsername(e.target.value);
@@ -37,10 +39,22 @@ export default function Page() {
 
   const login = async (e) => {
     e.preventDefault();
-    const token = await apiLogin({ username, password });
+    setLoginError(null);
+    setSubmitting(true);
+    // apiLogin THROWS on failure (bad credentials or fetch error) — without a
+    // catch the rejection was unhandled and a wrong password gave the user no
+    // feedback at all (the form just sat there).
+    let token;
+    try {
+      token = await apiLogin({ username, password });
+    } catch (err) {
+      setLoginError(err.message || 'Login failed');
+      return;
+    } finally {
+      setSubmitting(false);
+    }
 
     if (token) {
-      console.log("LOGGED IN:", token)
       // Optimistically mark logged-in; SWR revalidates to pull feature flags.
       pingMutate({ loggedIn: true })
       //this.props.updateAuthCB(token);
@@ -82,7 +96,14 @@ export default function Page() {
                 placeholder="Enter password"
               />
             </FormGroup>
-            <Button type="submit">Login</Button>
+            {loginError && (
+              <p role="alert" style={{ color: '#c00', margin: '8px 0' }}>
+                {loginError}
+              </p>
+            )}
+            <Button type="submit" disabled={submitting}>
+              {submitting ? '…' : 'Login'}
+            </Button>
           </form>
         </div>
 

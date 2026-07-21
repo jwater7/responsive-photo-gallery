@@ -14,10 +14,25 @@ FROM node:24-slim
 
 WORKDIR /app
 
-# Native OCR engine + English data, ImageMagick for optional preprocessing,
-# and curl/unzip to fetch the offline GeoNames dataset below.
+# Native OCR engine + English data, and curl/unzip to fetch the offline GeoNames
+# dataset below.
+#
+# OCR preprocessing runs in-process via sharp (libvips), already bundled with the
+# npm deps (transformers uses it for CLIP) — so ImageMagick is no longer installed,
+# dropping its large Debian codec-CVE surface. To switch back to the legacy
+# ImageMagick `convert` backend (e.g. for BMP, which libvips can't decode, or to
+# revert a sharp regression), add `imagemagick` to the install list below and set
+# OCR_PREPROCESS_USE_MAGICK=true on the service.
+#
+# ffmpeg provides ffprobe, which the geo enricher uses to read a video's embedded
+# location + capture date (the QuickTime metadata atoms exifr can't reach). It is
+# also forward-compatible groundwork for later frame-based video enrichment
+# (keyframe CLIP/OCR). NOTE: the API and worker containers share this image, so
+# ffmpeg lands in both and adds to the Debian CVE surface (see Security TODO) —
+# accepted because the enrichment plane is internal-only. Debian ships ffprobe
+# only inside the ffmpeg package, so there is no slimmer option.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      tesseract-ocr tesseract-ocr-eng imagemagick curl unzip ca-certificates \
+      tesseract-ocr tesseract-ocr-eng ffmpeg curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Bundle the higher-accuracy tessdata_best LSTM model for English (build-time
@@ -38,13 +53,17 @@ RUN mkdir -p /data/geonames && cd /data/geonames \
     && curl -fsSL https://download.geonames.org/export/dump/countryInfo.txt -o countryInfo.txt
 
 # Scoped workspace install. The root manifest + the enrichment manifest + the
-# rpg-config package are enough for `--workspace=enrichment` to resolve and install
-# ONLY the enrichment dependency closure (enrichment deps + rpg-config) — gallery
-# and the other packages are absent from the context and npm tolerates that, so the
-# image stays lean. rpg-config is linked into /app/node_modules with its real path
-# under /app, so its hoisted deps resolve with no per-image workaround.
+# in-tree packages enrichment links (rpg-config, rpg-path-safety,
+# rpg-media-types) are enough for
+# `--workspace=enrichment` to resolve and install ONLY the enrichment dependency
+# closure — gallery and the other packages are absent from the context and npm
+# tolerates that, so the image stays lean. The linked packages land in
+# /app/node_modules with their real paths under /app, so their hoisted deps
+# resolve with no per-image workaround.
 COPY package.json ./
 COPY packages/config ./packages/config
+COPY packages/path-safety ./packages/path-safety
+COPY packages/media-types ./packages/media-types
 COPY enrichment/package*.json ./enrichment/
 RUN npm install --omit=dev --workspace=enrichment && npm cache clean --force
 

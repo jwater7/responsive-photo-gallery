@@ -10,7 +10,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 
-const { isCurrent } = require("../src/lib/pipeline");
+const { isCurrent, isForced } = require("../src/lib/pipeline");
 
 const ocr = { name: "ocr", version: 2, outputFields: ["content", "confidence"] };
 const geo = { name: "geo", version: 1, outputFields: ["geo_checked"] };
@@ -57,4 +57,23 @@ test("a recorded error forces a retry even when version is current", () => {
   );
   // ...and once the error is cleared (null), the same doc is current again.
   assert.strictEqual(isCurrent({ geo_checked: true, geo_version: 1, geo_error: null }, geo), true);
+});
+
+// isForced: the admin "Force" scan re-runs an enricher regardless of isCurrent.
+// `true` forces all; a list forces only those names; falsy/[] forces none.
+test("isForced: true forces every enricher", () => {
+  assert.strictEqual(isForced(true, ocr), true);
+  assert.strictEqual(isForced(true, geo), true);
+});
+
+test("isForced: a name list forces only the listed enrichers", () => {
+  assert.strictEqual(isForced(["ocr"], ocr), true);
+  assert.strictEqual(isForced(["ocr"], geo), false);
+  assert.strictEqual(isForced(["geo", "ocr"], geo), true);
+});
+
+test("isForced: falsy or empty forces nothing", () => {
+  assert.strictEqual(isForced(false, ocr), false);
+  assert.strictEqual(isForced(undefined, ocr), false);
+  assert.strictEqual(isForced([], ocr), false);
 });

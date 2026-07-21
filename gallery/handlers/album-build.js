@@ -54,38 +54,14 @@ const COVER_CELL_SIZE = parseInt(process.env.COVER_CELL_SIZE, 10) || 128
 const COVER_MAX_CELLS = parseInt(process.env.COVER_MAX_CELLS, 10) || 48
 const COVER_SHEET_COLUMNS = parseInt(process.env.COVER_SHEET_COLUMNS, 10) || 8
 
-const IMAGE_EXTS = new Set([
-  '.jpg',
-  '.jpeg',
-  '.png',
-  '.webp',
-  '.gif',
-  '.tif',
-  '.tiff',
-  '.heic',
-  '.heif',
-  '.avif',
-  '.bmp',
-])
-const VIDEO_EXTS = new Set(['.mov', '.mp4', '.m4v', '.webm'])
+// "What counts as media" comes from the shared registry (these sets were its
+// canonical source before it existed — the local copies are gone), and the
+// traversal itself is the shared excludes-aware walker.
+const { isMedia, walkMedia } = require('rpg-media-types')
 
-const isMedia = (rel) => {
-  const ext = path.extname(rel).toLowerCase()
-  return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext)
-}
-
-// Resolve a caller-supplied album name to an absolute path confined to `root`.
-// Returns '' on traversal attempts.
-const safeJoin = (root, sub) => {
-  const base = path.resolve(root)
-  const resolved = path.resolve(path.join(base, path.normalize(sub)))
-  // Boundary test, not a string prefix: `startsWith(base)` alone would also
-  // accept a sibling like "<base>-evil". Require the path separator (or an
-  // exact match on the root itself).
-  return resolved === base || resolved.startsWith(base + path.sep)
-    ? resolved
-    : ''
-}
+// Resolve a caller-supplied album name to an absolute path confined to `root`
+// ('' on traversal or a missing album): the shared containment primitive.
+const { resolveWithin: safeJoin } = require('rpg-path-safety')
 
 const md5 = (str) => crypto.createHash('md5').update(str).digest('hex')
 
@@ -141,46 +117,11 @@ async function mapLimit(items, limit, fn) {
   return results
 }
 
-// `excludes` is the normalized exclude list (relative to IMAGE_PATH); a subdir
-// whose IMAGE_PATH-relative path matches an excluded prefix is not descended.
-// This is how a *nested* exclude (e.g. "work/scans") drops files from an album
-// that is otherwise still listed/built.
-async function walkMedia(baseDir, dir = baseDir, out = [], excludes = []) {
-  let entries
-  try {
-    entries = await fs.promises.readdir(dir, { withFileTypes: true })
-  } catch (err) {
-    return out
-  }
-  for (const entry of entries) {
-    const abs = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      const relToImage = path
-        .relative(IMAGE_PATH, abs)
-        .split(path.sep)
-        .join('/')
-      if (runtimeConfig.isExcluded(relToImage, excludes)) continue
-      await walkMedia(baseDir, abs, out, excludes)
-    } else if (entry.isFile()) {
-      const rel = path.relative(baseDir, abs)
-      if (!isMedia(rel)) continue
-      try {
-        const stat = await fs.promises.stat(abs)
-        out.push({
-          rel,
-          abs,
-          size: stat.size,
-          mtimeMs: Math.round(stat.mtimeMs),
-        })
-      } catch (err) {
-        // unreadable entry; skip
-      }
-    }
-  }
-  return out
-}
-
 // List an album's media files (sorted) plus a whole-album content hash.
+// The exclude predicate checks the IMAGE_PATH-relative path (the walker hands
+// us album-relative dirs, so prefix the album name); a subdir matching an
+// excluded prefix is not descended. This is how a *nested* exclude (e.g.
+// "work/scans") drops files from an album that is otherwise still listed/built.
 async function scanAlbum(album) {
   const albumDir = safeJoin(IMAGE_PATH, album)
   if (!albumDir) {
@@ -189,7 +130,11 @@ async function scanAlbum(album) {
     throw err
   }
   const excludes = await runtimeConfig.getExcludes()
-  const files = await walkMedia(albumDir, albumDir, [], excludes)
+  const files = await walkMedia(albumDir, {
+    withStats: true,
+    shouldSkipDir: (rel) =>
+      runtimeConfig.isExcluded(`${album}/${rel}`, excludes),
+  })
   files.sort((a, b) => a.rel.localeCompare(b.rel))
   for (const f of files) f.srcHash = md5(`${f.rel}:${f.size}:${f.mtimeMs}`)
   const albumHash = md5(files.map((f) => f.srcHash).join('|'))
@@ -253,10 +198,13 @@ async function quickFingerprint(albumDir) {
     }
     dirSigs.push(`${path.relative(albumDir, dir) || '.'}:${mtimeMs}`)
     for (const entry of entries) {
+      // Same dot-entry rule as the shared walker, so this cheap count can
+      // never disagree with what scanAlbum will actually find.
+      if (entry.name.startsWith('.')) continue
       const abs = path.join(dir, entry.name)
       if (entry.isDirectory()) {
         await walk(abs)
-      } else if (entry.isFile() && isMedia(path.relative(albumDir, abs))) {
+      } else if (entry.isFile() && isMedia(entry.name)) {
         count++
       }
     }
@@ -643,6 +591,28 @@ async function ensureAlbum(album) {
   return { state: 'building', status: getStatus(album) }
 }
 
+/**
+ * Admin "rebuild": drop the album's cached manifest and kick off a fresh
+ * background build. Needed because the quickKey fingerprint tracks the
+ * album's FILES, not the build code — a manifest produced by older code
+ * (e.g. pre-registry builds that skipped `.m4v`/`.webm` as unrenderable)
+ * would otherwise be served forever, since the files themselves never
+ * changed. Thumbs/sheets are left in place; the rebuild overwrites them.
+ * @returns the ensureAlbum result ({ state: 'building'|'ready', ... })
+ */
+async function rebuildAlbum(album) {
+  const dir = albumCacheDir(album)
+  if (!dir) {
+    const err = new Error('Invalid album')
+    err.code = 400
+    throw err
+  }
+  await fs.promises.rm(path.join(dir, 'manifest.json'), { force: true })
+  // ensureAlbum re-validates (unknown/excluded/empty album → 400/404), finds
+  // no manifest, and triggers the single-flight background build.
+  return ensureAlbum(album)
+}
+
 // Snapshot of in-progress album builds for the admin UI: which albums are
 // building (actively scanning/rendering, total > 0) or queued (waiting for a
 // build slot, total 0), plus the build-slot usage.
@@ -672,6 +642,7 @@ function getActivity() {
 
 module.exports = {
   ensureAlbum,
+  rebuildAlbum,
   getStatus,
   getActivity,
   readManifest,

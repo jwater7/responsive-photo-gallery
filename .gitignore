@@ -51,3 +51,8 @@ npm-debug.log
 /TODO-DONE.md
 /AGENTS.md
 /GEMINI.md
+
+# Playwright e2e artifacts
+e2e/.auth/
+playwright-report/
+test-results/

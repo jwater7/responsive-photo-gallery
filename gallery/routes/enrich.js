@@ -7,11 +7,24 @@
 // gallery never depends on the enrichment plane for normal operation.
 
 const express = require('express')
+const runtimeConfig = require('rpg-config')
 
 const ENRICH_URL =
   process.env.ENRICH_URL || 'http://rpg-enrichment-indexer:8080'
 
 const router = express.Router()
+
+// Outbound headers for calls into the enrichment API. Carries the shared secret
+// (auto-generated + cached by the gallery at startup) when one is configured, so
+// the enrichment service can verify the request came from us. Omitted when no
+// secret exists (fail-open / optional). /health is probed without it (left open).
+function enrichHeaders() {
+  const secret = runtimeConfig.getEnrichSecret()
+  return {
+    'Content-Type': 'application/json',
+    ...(secret && { 'X-Enrich-Secret': secret }),
+  }
+}
 
 // Health probe with hysteresis. The indexer shares one event loop with its
 // enrichment worker, so while it's processing (CLIP/OCR — measured ~3-4s/image)
@@ -82,7 +95,7 @@ async function forward(req, res, targetPath) {
   try {
     const r = await fetch(ENRICH_URL + targetPath, {
       method: req.method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: enrichHeaders(),
       body: ['POST', 'PUT'].includes(req.method)
         ? JSON.stringify(req.body || {})
         : undefined,
@@ -98,6 +111,9 @@ async function forward(req, res, targetPath) {
 }
 
 router.post('/search', (req, res) => forward(req, res, '/api/v1/search'))
+// Map density: true photo count per H3 cell for a viewport (the map's primary
+// data source — replaces sampled client-side clustering).
+router.post('/geo-density', (req, res) => forward(req, res, '/api/v1/geo-density'))
 router.post('/geo', (req, res) => forward(req, res, '/api/v1/geo'))
 router.get('/status', (req, res) => forward(req, res, '/api/v1/status'))
 // Admin: one-shot enrichment coverage snapshot (counts of docs with embeddings,
@@ -121,6 +137,12 @@ router.post('/enrichment-sync', (req, res) =>
 // Admin: reap orphaned/stale index docs (deleted or edited-away photos).
 // Non-blocking on the indexer side; result observed via /status (`lastReap`).
 router.post('/reap', (req, res) => forward(req, res, '/api/v1/reap'))
+// Admin: delete the retained FAILED Meili task history, resetting the failedTasks
+// health signal (see /index-stats) once the underlying write failures are fixed.
+// Async on the Meili side; the admin re-fetches coverage to confirm it dropped.
+router.post('/clear-failed-tasks', (req, res) =>
+  forward(req, res, '/api/v1/clear-failed-tasks')
+)
 
 // Server-side fire-and-forget reap trigger, used by the excludes PUT handler so
 // that newly-excluded paths' index docs drop out as orphans on the next reap
@@ -129,7 +151,7 @@ router.post('/reap', (req, res) => forward(req, res, '/api/v1/reap'))
 function triggerReap() {
   return fetch(ENRICH_URL + '/api/v1/reap', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: enrichHeaders(),
     body: '{}',
     signal: AbortSignal.timeout(15000),
   })
