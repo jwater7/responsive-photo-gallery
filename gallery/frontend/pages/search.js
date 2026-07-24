@@ -19,6 +19,7 @@ import { imageRef } from '../lib/image-ref';
 import { docToSlide } from '../lib/slide';
 import MetaLightbox from '../components/MetaLightbox';
 import ViewOnMapAction from '../components/ViewOnMapAction';
+import ViewInAlbumAction from '../components/ViewInAlbumAction';
 
 const THUMB = '150x150';
 
@@ -408,7 +409,12 @@ export default function Search() {
                   syncImage(results[i]?.path);
                 },
               }}
-              actions={(slide) => <ViewOnMapAction meta={slide.meta} />}
+              actions={(slide) => (
+                <>
+                  <ViewOnMapAction meta={slide.meta} />
+                  <ViewInAlbumAction meta={slide.meta} />
+                </>
+              )}
               favorite={{
                 isFavorite: (slide) => favorites.isFavorite(slide.meta),
                 onToggle: (slide, next) => favorites.toggle(slide.meta, next),
