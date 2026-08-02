@@ -32,9 +32,10 @@
     "prettier": "^3.8.4",
     "vitest": "^4.1.10"
   },
-  "overridesComment": "postcss: Next 16.2.x pins 8.4.31, vulnerable to GHSA-qx2v-qp2m-jg93 (XSS in CSS stringify, build-time only). Forced to patched 8.5.x — semver-compatible and only used by Next's build, so the static export is unaffected.",
+  "overridesComment": "postcss: Next 16.2.x pins 8.4.31, vulnerable to GHSA-qx2v-qp2m-jg93 (XSS in CSS stringify, build-time only). Forced to patched 8.5.x — semver-compatible and only used by Next's build, so the static export is unaffected. sharp: Next lists sharp ^0.34.5 as an optional dep for its Image Optimization API; that API never runs here (output:'export' is a static export), so no untrusted image reaches sharp, but the tree still trips npm audit on the inherited libvips CVEs (GHSA-f88m-g3jw-g9cj). Forced to 0.35.x (libvips 8.18.3) to keep audit clean. Node >=20.9 required by sharp 0.35 is satisfied (frontend build image is node:24-alpine).",
   "overrides": {
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "sharp": "^0.35.3"
   },
   "engines": {
     "node": ">=18"

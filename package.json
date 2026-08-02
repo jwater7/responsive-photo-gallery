@@ -21,8 +21,9 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1"
   },
-  "overrides-comment": "adm-zip: kludge for CVE-2026-39244 (crafted ZIP -> 4GB alloc). onnxruntime-node still pins adm-zip ^0.5.16 up through its latest (1.27.0), so no upgrade clears it. adm-zip is only used by onnxruntime-node's install-time CUDA-extract script (not runtime), and the 0.6.0 API we rely on (getEntry/extractEntryTo) is unchanged. Remove once onnxruntime-node relaxes the pin.",
+  "overrides-comment": "adm-zip: kludge for CVE-2026-39244 (crafted ZIP -> 4GB alloc). onnxruntime-node still pins adm-zip ^0.5.16 up through its latest (1.27.0), so no upgrade clears it. adm-zip is only used by onnxruntime-node's install-time CUDA-extract script (not runtime), and the 0.6.0 API we rely on (getEntry/extractEntryTo) is unchanged. Remove once onnxruntime-node relaxes the pin. sharp: force 0.35.x to clear the inherited libvips CVEs CVE-2026-33327/33328/35590/35591 (GHSA-f88m-g3jw-g9cj, fixed in libvips 8.18.3 bundled by sharp 0.35.0+). Our direct deps (enrichment, packages/fast-image-processing) already ask for ^0.35.3, but @huggingface/transformers' latest (4.2.0) still pins sharp ^0.34.5, so the override is what pulls the transitive copy forward. sharp 0.34->0.35 removed the deprecated failOnError/paletteBitDepth/sharpen props (none used here; we use failOn:'none') and requires Node >=20.9 (Docker is node:24). Remove once transformers accepts sharp 0.35.",
   "overrides": {
-    "adm-zip": "^0.6.0"
+    "adm-zip": "^0.6.0",
+    "sharp": "^0.35.3"
   }
 }

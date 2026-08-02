@@ -98,6 +98,59 @@ const sanitizeRequiredArguments = (args, _cb) => {
   return _cb(undefined, san_args)
 }
 
+// Resolve a caller-supplied (album, image) pair to an absolute path under the
+// image root, or null when it must be refused.
+//
+// The two arguments have DIFFERENT shapes and need different handling:
+//
+//   `album` is exactly one directory component (the gallery's albums() is a
+//   top-level readdir), so filename-sanitizing it is correct.
+//
+//   `image` is a RELATIVE PATH. Camera imports nest ("102APPLE/IMG_2354.JPG"),
+//   the enrichment indexer walks recursively, and lib/image-ref.js documents
+//   multi-level image paths. Filename-sanitizing it STRIPS the separators, which
+//   both breaks every nested image (the flattened name doesn't exist -> 500) and
+//   silently REWRITES near-miss names onto other real files (`flat.jpg"` ->
+//   `flat.jpg`). A sanitizer that mutates a path into a different valid path is
+//   the wrong tool; containment is.
+//
+// Containment is therefore applied in two steps, and the second step is the one
+// that matters: confining `image` to the ALBUM, not merely to the image root. A
+// single resolveWithin against the root would accept "/../other-album/x.jpg" —
+// path.join eats the album component, leaving a path that is still inside the
+// root but no longer inside the requested album. That would quietly make the
+// `album` argument non-authoritative.
+const resolveAlbumImage = (imageRoot, album, image) => {
+  // Non-string shapes (a duplicated query param arrives as an array) are caller
+  // errors, not TypeErrors thrown deep in a callback chain.
+  if (typeof album !== 'string' || typeof image !== 'string') return null
+  if (!album || !image) return null
+
+  const san_album = sanitize(album)
+  if (!san_album) return null
+
+  const album_dir = sanitizeToRoot(imageRoot, san_album)
+  // Guard the empty rejection value: resolveWithin('', x) would resolve against
+  // the process cwd, turning a rejected album into a live filesystem root.
+  if (!album_dir) return null
+
+  const image_path = sanitizeToRoot(album_dir, image)
+  if (!image_path) return null
+  // The album directory itself is not an image ("." / "/." / a trailing "..").
+  if (image_path === album_dir) return null
+
+  return { album: san_album, album_dir, image_path }
+}
+
+// Cache path for one thumbnail, confined the same way: the album's thumb
+// directory first, then the image path within it. `image` may be nested, so the
+// cache mirrors that nesting (fast-image-processing mkdirp's the parent).
+const resolveThumbPath = (cacheRoot, album, kind, san_thumb, image) => {
+  const dir = sanitizeToRoot(cacheRoot, path.join(album, kind, san_thumb))
+  if (!dir) return ''
+  return sanitizeToRoot(dir, image)
+}
+
 const sanitizeRequiredArgumentsAsync = (...a) =>
   new Promise((resolve, reject) =>
     sanitizeRequiredArguments(...a, (err, args) => {
@@ -162,39 +215,30 @@ class imageHandler {
   }
 
   image(album, image, thumb, _cb) {
-    // `image` is required too: passing it through unchecked let a missing
-    // param reach path.join(album, undefined), which throws (a 500) instead
-    // of this clean 400.
-    sanitizeRequiredArguments([album, image], (err, args) => {
-      if (err || !args) {
-        return _cb(
-          {
-            error: {
-              code: 400,
-              message: err.message,
-            },
-          },
-          undefined,
-          undefined
-        )
-      }
-      const [album, image] = args
+    // A refused path is a CALLER error (400), not a server failure (500):
+    // reporting it as 500 both misleads monitoring and makes a rejected path
+    // indistinguishable from a genuine read error.
+    const bad = (message) =>
+      _cb({ error: { code: 400, message } }, undefined, undefined)
 
-      const image_path = sanitizeToRoot(this.imagePath, path.join(album, image))
+    const resolved = resolveAlbumImage(this.imagePath, album, image)
+    if (!resolved) return bad('malformed or missing album/image argument')
+    const { album: san_album, image_path } = resolved
 
+    {
       // If they want a thumbnail, generate, cache, and return it instead
       if (thumb) {
+        if (typeof thumb !== 'string') return bad('malformed thumb argument')
         const san_thumb = sanitize(thumb)
-        let thumb_path = sanitizeToRoot(
+        if (!san_thumb) return bad('malformed thumb argument')
+        const thumb_path = resolveThumbPath(
           this.cachePath,
-          path.join(album, 'thumbs', thumb, image)
+          san_album,
+          isVideo(image) ? 'video-thumbs' : 'thumbs',
+          san_thumb,
+          image
         )
-        if (isVideo(image)) {
-          thumb_path = sanitizeToRoot(
-            this.cachePath,
-            path.join(album, 'video-thumbs', thumb, image)
-          )
-        }
+        if (!thumb_path) return bad('malformed thumb argument')
         return getThumbBuffer(
           image_path,
           thumb_path,
@@ -244,30 +288,21 @@ class imageHandler {
           return _cb(undefined, image_buffer, image_content_type)
         }
       )
-    })
+    }
   }
 
   video(album, image, _cb) {
-    // `image` required for the same reason as image() above.
-    sanitizeRequiredArguments([album, image], (err, args) => {
-      if (err || !args) {
-        return _cb(
-          {
-            error: {
-              code: 400,
-              message: err.message,
-            },
-          },
-          undefined,
-          undefined
-        )
-      }
-      const [album, image] = args
+    // Same two-step containment as image(): videos live in the same album tree
+    // and nest the same way (an iPhone import puts .MOV beside .JPG).
+    const resolved = resolveAlbumImage(this.imagePath, album, image)
+    if (!resolved) {
+      return _cb(
+        { error: { code: 400, message: 'malformed or missing album/image argument' } },
+        undefined
+      )
+    }
 
-      const vid_path = sanitizeToRoot(this.imagePath, path.join(album, image))
-
-      return _cb(undefined, vid_path)
-    })
+    return _cb(undefined, resolved.image_path)
   }
 
   thumbnails(album, thumb, image, num_results, distributed, _cb) {
@@ -286,20 +321,26 @@ class imageHandler {
 
       // If they only want a single thumbnail, generate, cache, and return it instead
       if (image) {
-        const image_path = sanitizeToRoot(
-          this.imagePath,
-          path.join(album, image)
-        )
+        // Same two-step containment as image(): this route passed `image`
+        // through UNSANITIZED, so it accepted "/../other-album/x.jpg" — inside
+        // the image root, but outside the requested album.
+        const resolved = resolveAlbumImage(this.imagePath, album, image)
+        if (!resolved) {
+          return _cb({
+            error: { code: 400, message: 'malformed or missing album/image argument' },
+          })
+        }
+        const image_path = resolved.image_path
         const san_thumb = sanitize(thumb)
-        let thumb_path = sanitizeToRoot(
+        const thumb_path = resolveThumbPath(
           this.cachePath,
-          path.join(album, 'thumbs', thumb, image)
+          resolved.album,
+          isVideo(image) ? 'video-thumbs' : 'thumbs',
+          san_thumb,
+          image
         )
-        if (isVideo(image)) {
-          thumb_path = sanitizeToRoot(
-            this.cachePath,
-            path.join(album, 'video-thumbs', thumb, image)
-          )
+        if (!thumb_path) {
+          return _cb({ error: { code: 400, message: 'malformed thumb argument' } })
         }
         return getThumbBuffer(
           image_path,
@@ -363,16 +404,16 @@ class imageHandler {
           (file) => {
             const san_thumb = sanitize(thumb)
             const image_path = path.join(album_path, file)
-            let thumb_path = sanitizeToRoot(
+            // `file` comes from listAlbumFiles (read off disk), not the caller,
+            // but it is confined the same way so one code path governs where
+            // thumbnails may be written.
+            const thumb_path = resolveThumbPath(
               this.cachePath,
-              path.join(album, 'thumbs', thumb, file)
+              album,
+              isVideo(file) ? 'video-thumbs' : 'thumbs',
+              san_thumb,
+              file
             )
-            if (isVideo(file)) {
-              thumb_path = sanitizeToRoot(
-                this.cachePath,
-                path.join(album, 'video-thumbs', thumb, file)
-              )
-            }
             return new Promise((resolve, reject) => {
               getThumbBuffer(
                 image_path,
