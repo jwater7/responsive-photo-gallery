@@ -27,7 +27,7 @@
     "passport": "^0.7.0",
     "passport-strategy": "^1.0.0",
     "pug": "^3.0.4",
-    "query-string": "^9.4.0",
+    "query-string": "^9.5.1",
     "rpg-config": "*",
     "rpg-media-types": "*",
     "rpg-path-safety": "*",
