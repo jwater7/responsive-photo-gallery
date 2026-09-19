@@ -11,7 +11,7 @@
     "eslint": "eslint ."
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
+    "@huggingface/transformers": "^4.3.0",
     "bullmq": "^5.79.0",
     "chokidar": "^5.0.0",
     "debug": "^4.4.0",
